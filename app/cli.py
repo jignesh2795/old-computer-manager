@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import json
 import platform
 import socket
 import sys
+
+from app.discovery import run
 
 
 def main() -> int:
@@ -13,7 +16,11 @@ def main() -> int:
     print(f"Platform: {platform.platform()}")
     print(f"Python: {sys.version.split()[0]}")
     print(f"Computer name: {socket.gethostname()}")
-    print("Collectors will be added incrementally.")
+    print("Collecting baseline information...\n")
+
+    results = run()
+    print(json.dumps(results, indent=2, default=str))
+    print("\nBaseline saved to data/computer.db")
     return 0
 
 
