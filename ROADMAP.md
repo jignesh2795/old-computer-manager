@@ -4,6 +4,24 @@ This document tracks completed milestones and potential future directions for Ol
 
 ## Completed Milestones
 
+### v0.9.0-alpha — Historical AI Reasoning ✓
+
+**Status**: Released 2026-09-16
+
+**Capabilities**:
+- AI system prompt v1.1 with historical reasoning rules
+- FACT/INFERENCE/UNCERTAINTY distinction in historical explanations
+- Trend observations with direction and delta
+- Baseline reasoning with comparison and status
+- Recurring finding explanations with occurrence count
+- Anomaly interpretation without speculative cause attribution
+- Battery baseline reasoning (unavailable/established/degraded)
+- `HistoricalSummary` dataclass in AI advisory output
+- 44 new tests covering all historical AI reasoning features
+- 542 tests passing
+
+---
+
 ### v0.8.0-alpha — Historical Trends + Baseline Comparison ✓
 
 **Status**: Released 2026-09-16

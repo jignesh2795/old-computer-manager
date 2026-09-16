@@ -641,7 +641,7 @@ class TestPromptDesign:
         assert len(SYSTEM_PROMPT) > 100
 
     def test_prompt_version(self) -> None:
-        assert AI_PROMPT_VERSION == "1.0"
+        assert AI_PROMPT_VERSION == "1.1"
 
     def test_prompt_forbids_execution(self) -> None:
         assert "MUST NOT" in SYSTEM_PROMPT

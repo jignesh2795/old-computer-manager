@@ -176,8 +176,19 @@ class LimitationResponse(BaseModel):
 class AdvisoryMetadataResponse(BaseModel):
     provider: str = ""
     model: str = ""
-    prompt_version: str = "1.0"
+    prompt_version: str = "1.1"
     generated_at: str = ""
+
+
+class AdvisoryHistoricalSummaryResponse(BaseModel):
+    runs_considered: int = 0
+    observations_used: int = 0
+    trends_count: int = 0
+    baselines_established: int = 0
+    recurring_findings_count: int = 0
+    anomalies_count: int = 0
+    data_quality_issues: int = 0
+    limited_by: str = ""
 
 
 class AdvisoryResponse(BaseModel):
@@ -191,6 +202,7 @@ class AdvisoryResponse(BaseModel):
     uncertainties: list[UncertaintyResponse] = []
     limitations: list[LimitationResponse] = []
     metadata: AdvisoryMetadataResponse = AdvisoryMetadataResponse()
+    historical_summary: AdvisoryHistoricalSummaryResponse | None = None
 
 
 # Historical analysis schemas

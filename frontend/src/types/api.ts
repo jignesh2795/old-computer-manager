@@ -167,6 +167,17 @@ export interface AdvisoryMetadataResponse {
   generated_at: string
 }
 
+export interface AdvisoryHistoricalSummaryResponse {
+  runs_considered: number
+  observations_used: number
+  trends_count: number
+  baselines_established: number
+  recurring_findings_count: number
+  anomalies_count: number
+  data_quality_issues: number
+  limited_by: string
+}
+
 export interface AdvisoryResponse {
   schema_version: string
   generated_at: string
@@ -178,6 +189,7 @@ export interface AdvisoryResponse {
   uncertainties: UncertaintyResponse[]
   limitations: LimitationResponse[]
   metadata: AdvisoryMetadataResponse
+  historical_summary: AdvisoryHistoricalSummaryResponse | null
 }
 
 // Historical analysis types

@@ -4,6 +4,64 @@ All notable changes to Old Computer Manager will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [v0.9.0-alpha] - 2026-09-16
+
+### Phase 8B — Historical AI Reasoning
+
+This release extends the AI advisory system to explain historical changes, trends, recurring findings, baselines, and anomalies using factual/inference/uncertainty distinction.
+
+### Added
+
+#### Historical AI Reasoning (Phase 8B)
+- AI system prompt v1.1 with historical reasoning rules
+- FACT/INFERENCE/UNCERTAINTY distinction in historical explanations
+- Trend observations: increasing, decreasing, stable metrics with evidence
+- Baseline reasoning: current vs. baseline comparison with delta and direction
+- Recurring finding explanations with occurrence count and time span
+- Anomaly interpretation: describe changes without speculative cause attribution
+- Battery baseline reasoning with unavailable/established/degraded status
+- Data quality awareness in historical context
+
+#### AI Models
+- `HistoricalSummary` dataclass with bounded historical analysis summary
+- `AIAdvisory.historical_summary` field (backward compatible, optional)
+- `AdvisoryMetadata.prompt_version` updated to "1.1"
+
+#### API
+- `AdvisoryHistoricalSummaryResponse` schema in API responses
+- `AdvisoryResponse.historical_summary` field (nullable, backward compatible)
+
+#### Frontend
+- `AdvisoryHistoricalSummaryResponse` TypeScript type
+- Historical summary display in AI Advisory dashboard section
+
+#### Tests
+- 44 new tests covering historical AI reasoning (A-R test cases)
+- Historical context inclusion, limits, baseline, trend, recurring, anomaly reasoning
+- Factual/inference distinction verification
+- CLI, JSON, API, and dashboard output verification
+- Safety and security validation
+
+### Changed
+- AI prompt version: 1.0 -> 1.1
+- AI advisory now includes historical observations when data available
+- MockProvider generates historical observations from context
+- CLI `ai` command displays historical summary section
+- API endpoint returns historical_summary in advisory response
+
+### Safety
+- All AI recommendations remain executable=false
+- No new modification authority
+- No subprocess, shell, registry, or network calls
+- Historical observations are factual, not speculative
+- Prompt explicitly distinguishes FACT from INTERPRETATION from UNCERTAINTY
+
+### Test Baseline
+- **Backend**: 542 passed, 3 skipped, 0 failures
+- **Frontend**: 13 passed, 0 failures
+
+---
+
 ## [v0.8.0-alpha] - 2026-09-16
 
 ### Phase 8A — Historical Trends + Baseline Comparison

@@ -4,7 +4,7 @@ A local-first, read-only computer intelligence system for understanding, diagnos
 
 ## Version
 
-**v0.8.0-alpha** — Historical Trends + Baseline Comparison
+**v0.9.0-alpha** — Historical AI Reasoning
 
 ## Purpose
 
@@ -100,7 +100,7 @@ old-computer-manager ai
 old-computer-manager ai --json
 ```
 
-Generates a local-first AI advisory from the latest completed report. The AI provides observations, recommendations, and uncertainties based on factual evidence.
+Generates a local-first AI advisory from the latest completed report. The AI provides observations, recommendations, and uncertainties based on factual evidence. When historical data is available, the AI explains trends, baselines, recurring findings, and anomalies using factual/inference/uncertainty distinction.
 
 **Important**: The AI advisory is read-only. It does NOT execute remediation, modify the system, or access secrets.
 
@@ -153,7 +153,7 @@ The dashboard provides a lightweight, read-only web interface for visualizing sy
 - **Findings**: Critical/warning/info analysis results with clear not-run vs completed states
 - **Storage**: Partition usage with progress visualization
 - **Battery**: Charge, health, wear, cycle count when available
-- **AI Advisory**: Observations, recommendations, uncertainties, limitations
+- **AI Advisory**: Observations, recommendations, uncertainties, limitations, historical summary
 - **Remediation**: Registered actions metadata (informational only, no execution controls)
 - **Historical**: Trends, baselines, recurring findings, anomalies across runs
 
@@ -406,7 +406,7 @@ npm test
 ```
 
 Current baseline:
-- **Backend**: 498 passed, 3 skipped, 0 failures
+- **Backend**: 542 passed, 3 skipped, 0 failures
 - **Frontend**: 13 passed, 0 failures
 
 ### Project Structure

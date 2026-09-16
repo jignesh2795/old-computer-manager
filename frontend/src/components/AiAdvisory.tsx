@@ -111,6 +111,25 @@ export function AiAdvisory({ advisory }: AiAdvisoryProps) {
           ))}
         </div>
       )}
+
+      {advisory.historical_summary && (
+        <div className="advisory-section" style={{ marginTop: '12px' }}>
+          <div className="advisory-section-title">Historical Summary</div>
+          <div className="advisory-item">
+            <div style={{ fontSize: '0.875rem' }}>
+              <div><strong>Runs considered:</strong> {advisory.historical_summary.runs_considered}</div>
+              <div><strong>Observations used:</strong> {advisory.historical_summary.observations_used}</div>
+              <div><strong>Trends analyzed:</strong> {advisory.historical_summary.trends_count}</div>
+              <div><strong>Baselines established:</strong> {advisory.historical_summary.baselines_established}</div>
+              <div><strong>Recurring findings:</strong> {advisory.historical_summary.recurring_findings_count}</div>
+              <div><strong>Anomalies detected:</strong> {advisory.historical_summary.anomalies_count}</div>
+              {advisory.historical_summary.data_quality_issues > 0 && (
+                <div><strong>Data quality issues:</strong> {advisory.historical_summary.data_quality_issues}</div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

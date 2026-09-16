@@ -10,6 +10,7 @@ from app.api.dependencies import get_report, get_store
 from app.api.schemas import (
     AdvisoryMetadataResponse,
     AdvisoryResponse,
+    AdvisoryHistoricalSummaryResponse,
     BatteryResponse,
     BaselineResponse,
     DataQualityResponse,
@@ -399,6 +400,20 @@ def get_ai_advisory_endpoint(report: HealthReport = Depends(get_report)) -> Advi
             model=advisory.metadata.model,
             prompt_version=advisory.metadata.prompt_version,
             generated_at=advisory.metadata.generated_at,
+        ),
+        historical_summary=(
+            AdvisoryHistoricalSummaryResponse(
+                runs_considered=advisory.historical_summary.runs_considered,
+                observations_used=advisory.historical_summary.observations_used,
+                trends_count=advisory.historical_summary.trends_count,
+                baselines_established=advisory.historical_summary.baselines_established,
+                recurring_findings_count=advisory.historical_summary.recurring_findings_count,
+                anomalies_count=advisory.historical_summary.anomalies_count,
+                data_quality_issues=advisory.historical_summary.data_quality_issues,
+                limited_by=advisory.historical_summary.limited_by,
+            )
+            if advisory.historical_summary is not None
+            else None
         ),
     )
 

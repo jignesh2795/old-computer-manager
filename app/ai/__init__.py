@@ -13,6 +13,7 @@ from app.ai.models import (
     Uncertainty,
     Limitation,
     AdvisoryMetadata,
+    HistoricalSummary,
 )
 from app.ai.context import build_ai_context, AIContext
 from app.ai.provider import AIProvider, get_provider
@@ -26,6 +27,7 @@ __all__ = [
     "Uncertainty",
     "Limitation",
     "AdvisoryMetadata",
+    "HistoricalSummary",
     "AIContext",
     "build_ai_context",
     "AIProvider",

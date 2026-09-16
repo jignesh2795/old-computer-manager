@@ -14,6 +14,7 @@ vi.mock('./api/client', () => ({
     remediationActions: vi.fn(),
     system: vi.fn(),
     advisory: vi.fn(),
+    history: vi.fn(),
   },
 }))
 
@@ -173,8 +174,18 @@ const mockAdvisory = {
   metadata: {
     provider: 'mock',
     model: 'deterministic',
-    prompt_version: '1.0',
+    prompt_version: '1.1',
     generated_at: '2026-09-16T12:00:00',
+  },
+  historical_summary: {
+    runs_considered: 5,
+    observations_used: 3,
+    trends_count: 2,
+    baselines_established: 1,
+    recurring_findings_count: 1,
+    anomalies_count: 0,
+    data_quality_issues: 0,
+    limited_by: '',
   },
 }
 
@@ -187,6 +198,7 @@ function setupMocks() {
   vi.mocked(api.fileAnalysis).mockResolvedValue(mockReport.file_analysis as any)
   vi.mocked(api.remediationActions).mockResolvedValue(mockReport.remediation as any)
   vi.mocked(api.system).mockResolvedValue(mockReport.system as any)
+  vi.mocked(api.history).mockResolvedValue(null as any)
 }
 
 async function clickRefresh() {
@@ -257,6 +269,7 @@ describe('Dashboard', () => {
     vi.mocked(api.fileAnalysis).mockResolvedValue(mockReport.file_analysis as any)
     vi.mocked(api.remediationActions).mockResolvedValue(mockReport.remediation as any)
     vi.mocked(api.system).mockResolvedValue(mockReport.system as any)
+    vi.mocked(api.history).mockResolvedValue(null as any)
 
     render(<App />)
     await clickRefresh()
@@ -290,6 +303,7 @@ describe('Dashboard', () => {
     vi.mocked(api.fileAnalysis).mockResolvedValue(mockReport.file_analysis as any)
     vi.mocked(api.remediationActions).mockResolvedValue(mockReport.remediation as any)
     vi.mocked(api.system).mockResolvedValue(mockReport.system as any)
+    vi.mocked(api.history).mockResolvedValue(null as any)
 
     render(<App />)
     await clickRefresh()
@@ -361,6 +375,7 @@ describe('Dashboard', () => {
     vi.mocked(api.fileAnalysis).mockResolvedValue(null)
     vi.mocked(api.remediationActions).mockResolvedValue(null)
     vi.mocked(api.system).mockResolvedValue(null)
+    vi.mocked(api.history).mockResolvedValue(null)
 
     render(<App />)
     await clickRefresh()

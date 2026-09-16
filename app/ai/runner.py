@@ -78,7 +78,7 @@ def run_advisory(
     except AdvisoryError as e:
         raise AdvisoryRunnerError(f"Advisory generation failed: {e}") from e
 
-    # Set report run ID
+    # Set report run ID and include historical summary
     advisory = AIAdvisory(
         schema_version=advisory.schema_version,
         generated_at=advisory.generated_at,
@@ -90,6 +90,7 @@ def run_advisory(
         uncertainties=advisory.uncertainties,
         limitations=advisory.limitations,
         metadata=advisory.metadata,
+        historical_summary=advisory.historical_summary,
     )
 
     return advisory

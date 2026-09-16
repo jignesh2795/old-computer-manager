@@ -10,7 +10,7 @@ import os
 from abc import ABC, abstractmethod
 from typing import Any
 
-from app.ai.context import AIContext
+from app.ai.context import AIContext, MAX_HISTORICAL_TRENDS, MAX_HISTORICAL_RECURRING, MAX_HISTORICAL_ANOMALIES
 from app.ai.models import AIAdvisory
 
 
@@ -57,12 +57,20 @@ class MockProvider(AIProvider):
     def generate_advisory(self, context: AIContext) -> AIAdvisory:
         """Generate deterministic advisory from context."""
         from datetime import datetime
-        from app.ai.models import Observation, Recommendation, Uncertainty, Limitation, AdvisoryMetadata
+        from app.ai.models import (
+            Observation,
+            Recommendation,
+            Uncertainty,
+            Limitation,
+            AdvisoryMetadata,
+            HistoricalSummary,
+        )
 
         observations = []
         recommendations = []
         uncertainties = []
         limitations = []
+        historical_summary = None
 
         # Analyze storage
         for partition in context.storage_summary.get("partitions", []):
@@ -164,6 +172,14 @@ class MockProvider(AIProvider):
                     executable=False,
                 ))
 
+        # Historical reasoning
+        hist = context.historical_summary
+        if hist and hist.get("available"):
+            hist_result = self._generate_historical_observations(
+                hist, observations, recommendations, uncertainties, limitations
+            )
+            historical_summary = hist_result
+
         # Add general limitations
         limitations.append(Limitation(
             description="Advisory is based on point-in-time observations, not continuous monitoring",
@@ -196,9 +212,143 @@ class MockProvider(AIProvider):
             metadata=AdvisoryMetadata(
                 provider="mock",
                 model="deterministic",
-                prompt_version="1.0",
+                prompt_version="1.1",
                 generated_at=datetime.now().isoformat(),
             ),
+            historical_summary=historical_summary,
+        )
+
+    def _generate_historical_observations(
+        self,
+        hist: dict[str, Any],
+        observations: list,
+        recommendations: list,
+        uncertainties: list,
+        limitations: list,
+    ) -> HistoricalSummary:
+        """Generate historical observations from context.
+
+        FACT: What changed?
+        INTERPRETATION: What might this imply?
+        UNCERTAINTY: What is not known?
+        """
+        from app.ai.models import Observation, Limitation, HistoricalSummary, Uncertainty
+        runs_considered = hist.get("runs_considered", 0)
+        trends = hist.get("trends", [])
+        recurring = hist.get("recurring_findings", [])
+        anomalies = hist.get("anomalies", [])
+        battery_baseline = hist.get("battery_baseline")
+
+        hist_obs_count = 0
+        baselines_established = 0
+        data_quality_issues = 0
+
+        # Trend observations
+        for trend in trends[:MAX_HISTORICAL_TRENDS]:
+            metric = trend.get("metric_name", "unknown")
+            direction = trend.get("direction", "unknown")
+            obs_count = trend.get("observations_count", 0)
+            delta = trend.get("delta_percent")
+
+            if direction == "insufficient_data":
+                continue
+
+            if direction == "increasing":
+                delta_str = f" (delta: +{delta:.1f}%)" if delta is not None else ""
+                observations.append(Observation(
+                    title=f"{metric} is increasing",
+                    evidence=f"{metric} shows an increasing trend across {obs_count} observations{delta_str}",
+                    source="historical_trends",
+                    severity="warning",
+                    confidence="medium",
+                ))
+                hist_obs_count += 1
+            elif direction == "decreasing":
+                delta_str = f" (delta: {delta:.1f}%)" if delta is not None else ""
+                observations.append(Observation(
+                    title=f"{metric} is decreasing",
+                    evidence=f"{metric} shows a decreasing trend across {obs_count} observations{delta_str}",
+                    source="historical_trends",
+                    severity="info",
+                    confidence="medium",
+                ))
+                hist_obs_count += 1
+
+        # Recurring finding observations
+        for rec in recurring[:MAX_HISTORICAL_RECURRING]:
+            observations.append(Observation(
+                title=f"Recurring: {rec.get('title', 'unknown')}",
+                evidence=(
+                    f"Finding '{rec.get('title', '')}' from {rec.get('analyzer', '')} "
+                    f"appeared in {rec.get('occurrence_count', 0)} discovery runs"
+                ),
+                source="historical_recurring",
+                severity=rec.get("severity", "info"),
+                confidence="high",
+            ))
+            hist_obs_count += 1
+
+        # Anomaly observations
+        for anomaly in anomalies[:MAX_HISTORICAL_ANOMALIES]:
+            observations.append(Observation(
+                title=f"Anomaly: {anomaly.get('title', 'unknown')}",
+                evidence=anomaly.get("message", "Unusual change detected"),
+                source="historical_anomalies",
+                severity=anomaly.get("severity", "info"),
+                confidence="medium",
+            ))
+            hist_obs_count += 1
+
+        # Battery baseline reasoning
+        if battery_baseline:
+            b_status = battery_baseline.get("baseline_status", "unavailable")
+            if b_status == "unavailable":
+                uncertainties.append(Uncertainty(
+                    description="Battery health baseline is unavailable",
+                    impact="Cannot compare current battery health to historical baseline",
+                ))
+                data_quality_issues += 1
+            elif b_status in ("degraded", "improved", "unchanged"):
+                baselines_established += 1
+                baseline_val = battery_baseline.get("baseline_value")
+                current_val = battery_baseline.get("current_value")
+                delta = battery_baseline.get("delta")
+                if baseline_val is not None and current_val is not None:
+                    observations.append(Observation(
+                        title=f"Battery health baseline: {b_status}",
+                        evidence=(
+                            f"Battery health baseline is {baseline_val:.1f}%, "
+                            f"current is {current_val:.1f}% "
+                            f"(delta: {delta:+.1f}pp)"
+                        ),
+                        source="historical_baseline",
+                        severity="warning" if b_status == "degraded" else "info",
+                        confidence="high",
+                    ))
+                    hist_obs_count += 1
+
+        # Data quality observations
+        quality = hist.get("data_quality", [])
+        for dq in quality:
+            if dq.get("missing_count", 0) > 0:
+                data_quality_issues += 1
+
+        # Add historical limitation
+        limitations.append(Limitation(
+            description=(
+                f"Historical analysis based on {runs_considered} completed discovery runs. "
+                "Trends and anomalies are descriptive, not predictive."
+            )
+        ))
+
+        return HistoricalSummary(
+            runs_considered=runs_considered,
+            observations_used=hist_obs_count,
+            trends_count=len(trends),
+            baselines_established=baselines_established,
+            recurring_findings_count=len(recurring),
+            anomalies_count=len(anomalies),
+            data_quality_issues=data_quality_issues,
         )
 
     def get_provider_name(self) -> str:

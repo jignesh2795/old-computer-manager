@@ -74,10 +74,28 @@ class AdvisoryMetadata:
 
     provider: str = ""
     model: str = ""
-    prompt_version: str = "1.0"
+    prompt_version: str = "1.1"
     generated_at: str = ""
     context_tokens_estimate: int = 0
     usage: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class HistoricalSummary:
+    """Summary of historical analysis included in advisory.
+
+    This provides a high-level overview of the historical data
+    considered when generating the advisory.
+    """
+
+    runs_considered: int = 0
+    observations_used: int = 0
+    trends_count: int = 0
+    baselines_established: int = 0
+    recurring_findings_count: int = 0
+    anomalies_count: int = 0
+    data_quality_issues: int = 0
+    limited_by: str = ""
 
 
 @dataclass(frozen=True)
@@ -98,3 +116,4 @@ class AIAdvisory:
     uncertainties: list[Uncertainty] = field(default_factory=list)
     limitations: list[Limitation] = field(default_factory=list)
     metadata: AdvisoryMetadata = field(default_factory=AdvisoryMetadata)
+    historical_summary: HistoricalSummary | None = None

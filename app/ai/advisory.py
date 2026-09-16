@@ -122,7 +122,7 @@ def advisory_to_dict(advisory: AIAdvisory) -> dict[str, Any]:
     Returns:
         Dictionary representation.
     """
-    return {
+    result: dict[str, Any] = {
         "schema_version": advisory.schema_version,
         "generated_at": advisory.generated_at,
         "report_run_id": advisory.report_run_id,
@@ -168,3 +168,18 @@ def advisory_to_dict(advisory: AIAdvisory) -> dict[str, Any]:
             "generated_at": advisory.metadata.generated_at,
         },
     }
+
+    # Include historical summary if present
+    if advisory.historical_summary is not None:
+        result["historical_summary"] = {
+            "runs_considered": advisory.historical_summary.runs_considered,
+            "observations_used": advisory.historical_summary.observations_used,
+            "trends_count": advisory.historical_summary.trends_count,
+            "baselines_established": advisory.historical_summary.baselines_established,
+            "recurring_findings_count": advisory.historical_summary.recurring_findings_count,
+            "anomalies_count": advisory.historical_summary.anomalies_count,
+            "data_quality_issues": advisory.historical_summary.data_quality_issues,
+            "limited_by": advisory.historical_summary.limited_by,
+        }
+
+    return result
