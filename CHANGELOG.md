@@ -4,6 +4,40 @@ All notable changes to Old Computer Manager will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [v0.6.0-alpha] - 2026-09-16
+
+### Phase 6A — Local-First AI Advisory Layer
+
+This release adds AI advisory capabilities while maintaining strict safety boundaries.
+
+### Added
+
+#### AI Advisory (Phase 6A)
+- `app/ai/` package with models, context builder, provider abstraction, and advisory generation
+- Deterministic mock provider for tests (no API quotas consumed)
+- Context builder with explicit budget limits (MAX_FINDINGS, MAX_LARGE_FILES, etc.)
+- Safety validator detecting prohibited content (shell commands, registry edits, etc.)
+- Prompt design with factuality rules and version tracking
+- Frozen dataclass models: AIAdvisory, Observation, Recommendation, Uncertainty, Limitation
+- Recommendation model enforces `executable=False` always
+- CLI `ai` command with human-readable and JSON output
+- FastAPI `GET /api/v1/ai/advisory` endpoint (read-only, mock provider)
+- 54 comprehensive tests covering safety, context limits, provider abstraction, and more
+
+#### Safety
+- AI has no executor dependency (verified by architecture tests)
+- AI cannot execute remediation, modify files, or change system state
+- Context excludes secrets, battery serial numbers, and file contents
+- External provider disabled by default (requires explicit environment configuration)
+- All AI output validated for prohibited content before return
+
+### Test Baseline
+- **451 passed**
+- **3 skipped** (symlink-related on Windows)
+- **0 failures**
+
+---
+
 ## [v0.5.0-alpha] - 2026-09-16
 
 ### Initial Stable Milestone — Local Computer Intelligence Core

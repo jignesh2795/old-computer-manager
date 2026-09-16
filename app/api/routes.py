@@ -8,17 +8,23 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.api.dependencies import get_report, get_store
 from app.api.schemas import (
+    AdvisoryMetadataResponse,
+    AdvisoryResponse,
     BatteryResponse,
     ErrorResponse,
     FileAnalysisResponse,
     FindingResponse,
     FindingsResponse,
+    LimitationResponse,
+    ObservationResponse,
+    RecommendationResponse,
     RemediationActionResponse,
     RemediationActionsResponse,
     ReportResponse,
     StoragePartitionResponse,
     StorageResponse,
     SystemResponse,
+    UncertaintyResponse,
 )
 from app.reporting.models import HealthReport
 
@@ -315,4 +321,77 @@ def get_system_endpoint(report: HealthReport = Depends(get_report)) -> SystemRes
         cpu_cores_physical=report.system.cpu_cores_physical,
         cpu_cores_logical=report.system.cpu_cores_logical,
         ram_total_bytes=report.system.ram_total_bytes,
+    )
+
+
+@router.get("/ai/advisory", response_model=AdvisoryResponse, tags=["ai"])
+def get_ai_advisory_endpoint(report: HealthReport = Depends(get_report)) -> AdvisoryResponse:
+    """Return AI advisory for the latest report.
+
+    This endpoint generates advisory using the deterministic mock provider.
+    It does NOT execute remediation or modify the system.
+    """
+    from app.ai.advisory import generate_advisory, AdvisoryError
+    from app.ai.provider import MockProvider
+
+    # Use mock provider for API (no external calls)
+    provider = MockProvider()
+
+    try:
+        advisory = generate_advisory(report, provider)
+    except AdvisoryError:
+        # Return empty advisory on error
+        return AdvisoryResponse(
+            summary="Advisory generation failed",
+            observations=[],
+            recommendations=[],
+            uncertainties=[],
+            limitations=[],
+        )
+
+    return AdvisoryResponse(
+        schema_version=advisory.schema_version,
+        generated_at=advisory.generated_at,
+        report_run_id=advisory.report_run_id,
+        analysis_status=advisory.analysis_status,
+        summary=advisory.summary,
+        observations=[
+            ObservationResponse(
+                title=obs.title,
+                evidence=obs.evidence,
+                source=obs.source,
+                severity=obs.severity,
+                confidence=obs.confidence,
+            )
+            for obs in advisory.observations
+        ],
+        recommendations=[
+            RecommendationResponse(
+                title=rec.title,
+                rationale=rec.rationale,
+                related_finding_ids=rec.related_finding_ids,
+                related_action_ids=rec.related_action_ids,
+                risk_level=rec.risk_level,
+                requires_confirmation=rec.requires_confirmation,
+                executable=rec.executable,
+            )
+            for rec in advisory.recommendations
+        ],
+        uncertainties=[
+            UncertaintyResponse(
+                description=unc.description,
+                impact=unc.impact,
+            )
+            for unc in advisory.uncertainties
+        ],
+        limitations=[
+            LimitationResponse(description=lim.description)
+            for lim in advisory.limitations
+        ],
+        metadata=AdvisoryMetadataResponse(
+            provider=advisory.metadata.provider,
+            model=advisory.metadata.model,
+            prompt_version=advisory.metadata.prompt_version,
+            generated_at=advisory.metadata.generated_at,
+        ),
     )

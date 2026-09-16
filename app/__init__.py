@@ -1,3 +1,3 @@
 """Old Computer Manager application package."""
 
-__version__ = "0.5.0a0"
+__version__ = "0.6.0a0"

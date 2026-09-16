@@ -92,6 +92,17 @@ old-computer-manager serve --host 127.0.0.1 --port 8000
 
 Starts a local FastAPI server with read-only endpoints. Binds to localhost only by default.
 
+### AI Advisory
+
+```bash
+old-computer-manager ai
+old-computer-manager ai --json
+```
+
+Generates a local-first AI advisory from the latest completed report. The AI provides observations, recommendations, and uncertainties based on factual evidence.
+
+**Important**: The AI advisory is read-only. It does NOT execute remediation, modify the system, or access secrets.
+
 ### Remediation Actions
 
 ```bash
@@ -120,6 +131,7 @@ All endpoints are GET-only and read-only. The server binds to localhost only.
 | `GET /api/v1/file-analysis` | Latest file scan summary |
 | `GET /api/v1/remediation/actions` | Remediation action metadata only |
 | `GET /api/v1/system` | System information |
+| `GET /api/v1/ai/advisory` | AI advisory (read-only, uses mock provider) |
 
 ### Interactive Documentation
 
@@ -136,6 +148,53 @@ When the server is running, visit:
 - File scanning is read-only
 - API serves existing database data only
 - No automatic remediation is triggered by intelligence gathering
+
+### AI Advisory Safety
+
+The AI advisory layer is strictly read-only:
+
+- **No execution**: AI cannot execute remediation actions
+- **No modification**: AI cannot modify the system, registry, services, or files
+- **No secrets**: AI context excludes passwords, tokens, API keys, and battery serial numbers
+- **No network**: Default provider is local mock; external providers disabled by default
+- **Factuality**: AI must distinguish measured facts from inference
+- **Uncertainties**: AI explicitly lists missing information
+- **Validation**: AI output is validated for prohibited content (shell commands, registry edits, etc.)
+
+The AI's role is: UNDERSTAND -> EXPLAIN -> PRIORITIZE FACTUAL FINDINGS -> SUGGEST SAFE NEXT STEPS
+
+#### Advisory vs Remediation
+
+The AI advisory is **informatory only**. It provides observations and recommendations but does NOT:
+- Execute remediation actions
+- Call the executor
+- Confirm actions
+- Rollback changes
+- Delete or move files
+- Modify Windows registry, services, or startup
+
+Users must manually review AI recommendations and use the remediation system (with confirmation tokens) to take action.
+
+#### Provider Architecture
+
+- **MockProvider** (default): Deterministic, no API quotas consumed, no network calls
+- **ExternalProvider** (disabled by default): Requires explicit `AI_API_KEY` and `AI_API_URL` environment variables
+
+#### Context Limits
+
+AI context is bounded to prevent excessive data exposure:
+- Max 20 findings
+- Max 10 large files
+- Max 5 duplicate groups
+- Max 20 processes
+- Max 15 startup items
+- Text truncated to 500 characters
+
+#### Privacy
+
+- Battery serial numbers excluded (only boolean `serial_number_present`)
+- File contents excluded (only metadata)
+- Secrets never included in context
 
 ### Available Remediation
 

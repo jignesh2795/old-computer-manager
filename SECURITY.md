@@ -1,6 +1,6 @@
 # Security Model
 
-This document describes the safety and security boundaries of Old Computer Manager v0.5.0-alpha.
+This document describes the safety and security boundaries of Old Computer Manager v0.6.0-alpha.
 
 ## Core Security Principles
 
@@ -92,6 +92,54 @@ The API does not trigger discovery or analysis:
 - No background processes are started
 - No system state changes occur
 
+## AI Safety Boundary
+
+The AI advisory layer (`app/ai/`) is strictly read-only and has no access to system modification capabilities.
+
+### What AI Cannot Do
+
+- **No executor access**: AI cannot import or call the remediation executor
+- **No confirmation-token access**: AI cannot create or consume confirmation tokens
+- **No rollback access**: AI cannot perform file restoration
+- **No shell execution**: AI output is validated to reject cmd.exe, PowerShell, and shell pipelines
+- **No filesystem modification**: AI cannot delete, move, or create files
+- **No registry modification**: AI cannot read or write Windows registry
+- **No service modification**: AI cannot start, stop, or configure Windows services
+- **No startup modification**: AI cannot modify startup configuration
+- **No network calls**: Default provider is local mock; external providers disabled by default
+
+### What AI Can Do
+
+- **Read-only analysis**: AI reads existing discovery/analysis data
+- **Pattern recognition**: AI identifies observations from collected data
+- **Risk prioritization**: AI ranks findings by severity
+- **Safe recommendations**: AI suggests next steps (no executable commands)
+- **Uncertainty reporting**: AI explicitly lists missing information
+
+### Privacy Controls
+
+AI context excludes:
+- Secrets, passwords, tokens, API keys
+- Battery serial numbers (only boolean `serial_number_present`)
+- File contents (only metadata)
+- Arbitrary text truncated to 500 characters
+- Large file lists capped at 10
+- Duplicate groups capped at 5
+- Findings capped at 20
+
+### Validation
+
+All AI output is validated for prohibited content:
+- Regex patterns detect shell commands, registry edits, destructive filesystem operations
+- Recommendations with `executable=True` are rejected
+- Output validation occurs before advisory generation
+
+### Provider Architecture
+
+- **MockProvider** (default): Deterministic, no API quotas consumed, no network calls
+- **ExternalProvider** (disabled by default): Requires explicit `AI_API_KEY` and `AI_API_URL` environment variables
+- External provider validates output with same safety rules as mock provider
+
 ## Remediation Safety
 
 ### Current Actions
@@ -156,7 +204,7 @@ The test suite includes comprehensive security verification:
 
 ### Test Coverage
 
-- 397 tests passing
+- 451 tests passing
 - 3 skipped (symlink-related on Windows)
 - 0 failures
 

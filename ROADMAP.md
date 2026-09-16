@@ -130,6 +130,6 @@ The following features are **not implemented** and represent potential developme
 
 No arbitrary dates or version numbers are committed to in advance. Development proceeds through milestones based on user needs and technical readiness.
 
-Current version: **v0.5.0-alpha**
+Current version: **v0.6.0-alpha**
 
 Next version will be determined when sufficient new functionality warrants a release.

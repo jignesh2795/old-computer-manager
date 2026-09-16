@@ -1,12 +1,12 @@
-# Release Notes: v0.5.0-alpha
+# Release Notes: v0.6.0-alpha
 
-**Local Computer Intelligence Core**
+**AI Advisory Layer**
 
 Released: 2026-09-16
 
 ## Summary
 
-Old Computer Manager v0.5.0-alpha is the first stable milestone — a complete local-first computer intelligence system for Windows with safe remediation capabilities.
+Old Computer Manager v0.6.0-alpha adds a local-first AI advisory layer with strict safety boundaries. The AI can analyze system state and provide observations/recommendations but has no executor access, no confirmation-token access, and no system modification authority.
 
 ## Major Capabilities
 
@@ -22,20 +22,29 @@ Old Computer Manager v0.5.0-alpha is the first stable milestone — a complete l
 - Cryptographically bound confirmation tokens
 - Full audit trail
 
+### AI Advisory (NEW)
+- Read-only advisory generation from system state
+- Deterministic mock provider (no API quotas consumed)
+- Context builder with explicit budget limits
+- Safety validator detecting prohibited content
+- Structured output: observations, recommendations, uncertainties, limitations
+- CLI `ai` command with human-readable and JSON output
+- FastAPI `GET /api/v1/ai/advisory` endpoint
+
 ### Unified Reporting
 - Human-readable health report
 - Deterministic JSON export
 - Analysis status tracking
 
 ### Local API
-- 8 read-only GET endpoints
+- 9 read-only GET endpoints
 - localhost-only binding
 - Interactive Swagger/ReDoc documentation
 
 ## Test Results
 
 ```
-397 passed
+451 passed
 3 skipped
 0 failures
 ```
@@ -49,6 +58,11 @@ Old Computer Manager v0.5.0-alpha is the first stable milestone — a complete l
 - Registry/services/tasks not modified
 - Permanent deletion not used
 - Battery serial numbers never stored
+- AI has no executor access
+- AI has no confirmation-token access
+- AI has no rollback access
+- AI output validated for prohibited content
+- External AI provider disabled by default
 
 ## Known Limitations
 
@@ -57,6 +71,7 @@ Old Computer Manager v0.5.0-alpha is the first stable milestone — a complete l
 - No real-time monitoring
 - No web UI
 - No historical trend visualization
+- AI advisory uses mock provider (no real LLM integration)
 
 ## Installation
 
@@ -75,6 +90,9 @@ old-computer-manager analyze
 
 # Generate report
 old-computer-manager report
+
+# Get AI advisory
+old-computer-manager ai
 
 # Start API
 old-computer-manager serve

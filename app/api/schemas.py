@@ -141,3 +141,53 @@ class ReportResponse(BaseModel):
 
 class ErrorResponse(BaseModel):
     detail: str
+
+
+# AI Advisory schemas
+
+
+class ObservationResponse(BaseModel):
+    title: str
+    evidence: str
+    source: str
+    severity: str = "info"
+    confidence: str = "high"
+
+
+class RecommendationResponse(BaseModel):
+    title: str
+    rationale: str
+    related_finding_ids: list[str] = []
+    related_action_ids: list[str] = []
+    risk_level: str = "low"
+    requires_confirmation: bool = True
+    executable: bool = False  # MUST be False always
+
+
+class UncertaintyResponse(BaseModel):
+    description: str
+    impact: str
+
+
+class LimitationResponse(BaseModel):
+    description: str
+
+
+class AdvisoryMetadataResponse(BaseModel):
+    provider: str = ""
+    model: str = ""
+    prompt_version: str = "1.0"
+    generated_at: str = ""
+
+
+class AdvisoryResponse(BaseModel):
+    schema_version: str = "1.0"
+    generated_at: str = ""
+    report_run_id: int | None = None
+    analysis_status: str | None = None
+    summary: str = ""
+    observations: list[ObservationResponse] = []
+    recommendations: list[RecommendationResponse] = []
+    uncertainties: list[UncertaintyResponse] = []
+    limitations: list[LimitationResponse] = []
+    metadata: AdvisoryMetadataResponse = AdvisoryMetadataResponse()
