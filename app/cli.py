@@ -18,7 +18,7 @@ def cmd_discover(args: argparse.Namespace) -> int:
     """Run a full discovery scan."""
     from app.discovery import run
 
-    print("Old Computer Manager v0.7.0-alpha")
+    print("Old Computer Manager v0.8.0-alpha")
     print("Read-only discovery mode")
     print(f"Platform: {platform.platform()}")
     print(f"Python: {sys.version.split()[0]}")
@@ -39,7 +39,7 @@ def cmd_analyze(args: argparse.Namespace) -> int:
     """Analyze the latest completed discovery run."""
     from app.analyzers.runner import analyze_latest_run
 
-    print("Old Computer Manager v0.7.0-alpha")
+    print("Old Computer Manager v0.8.0-alpha")
     print("Read-only analysis mode\n")
 
     store = SnapshotStore()
@@ -63,7 +63,7 @@ def cmd_actions(args: argparse.Namespace) -> int:
     """List registered remediation actions."""
     from app.remediation.registry import create_default_registry
 
-    print("Old Computer Manager v0.7.0-alpha")
+    print("Old Computer Manager v0.8.0-alpha")
     print("Remediation actions\n")
 
     registry = create_default_registry()
@@ -95,7 +95,7 @@ def cmd_actions_preview(args: argparse.Namespace) -> int:
     from app.remediation.preview import preview_action
     import json as json_mod
 
-    print("Old Computer Manager v0.7.0-alpha")
+    print("Old Computer Manager v0.8.0-alpha")
     print(f"Action preview: {args.action_id}\n")
 
     registry = create_default_registry()
@@ -177,7 +177,7 @@ def cmd_actions_execute(args: argparse.Namespace) -> int:
     from app.remediation.audit import AuditStore
     import json as json_mod
 
-    print("Old Computer Manager v0.7.0-alpha")
+    print("Old Computer Manager v0.8.0-alpha")
     print(f"Execute action: {args.action_id}\n")
 
     registry = create_default_registry()
@@ -258,7 +258,7 @@ def cmd_actions_rollback(args: argparse.Namespace) -> int:
     from app.remediation.audit import AuditStore, AuditStatus
     from app.database.sqlite import SnapshotStore
 
-    print("Old Computer Manager v0.7.0-alpha")
+    print("Old Computer Manager v0.8.0-alpha")
     print(f"Rollback quarantine record: {args.record_id}\n")
 
     db_path = Path("data/computer.db")
@@ -306,7 +306,7 @@ def cmd_files_scan(args: argparse.Namespace) -> int:
     from app.file_analysis.runner import run_file_analysis
     from app.database.sqlite import SnapshotStore
 
-    print("Old Computer Manager v0.7.0-alpha")
+    print("Old Computer Manager v0.8.0-alpha")
     print(f"File scan: {args.path}\n")
 
     try:
@@ -414,7 +414,7 @@ def cmd_files_large(args: argparse.Namespace) -> int:
     from app.file_analysis.runner import run_file_analysis
     from app.database.sqlite import SnapshotStore
 
-    print("Old Computer Manager v0.7.0-alpha")
+    print("Old Computer Manager v0.8.0-alpha")
     print("Large file analysis\n")
 
     # Use provided path or latest scan
@@ -464,7 +464,7 @@ def cmd_files_types(args: argparse.Namespace) -> int:
     from app.file_analysis.runner import run_file_analysis
     from app.database.sqlite import SnapshotStore
 
-    print("Old Computer Manager v0.7.0-alpha")
+    print("Old Computer Manager v0.8.0-alpha")
     print("File type analysis\n")
 
     if args.path:
@@ -503,7 +503,7 @@ def cmd_files_duplicates(args: argparse.Namespace) -> int:
     from app.file_analysis.runner import run_file_analysis
     from app.database.sqlite import SnapshotStore
 
-    print("Old Computer Manager v0.7.0-alpha")
+    print("Old Computer Manager v0.8.0-alpha")
     print("Duplicate file analysis\n")
 
     if args.path:
@@ -568,7 +568,7 @@ def cmd_report(args: argparse.Namespace) -> int:
     from app.reporting.runner import generate_report, generate_json, generate_human
     from app.database.sqlite import SnapshotStore
 
-    print("Old Computer Manager v0.7.0-alpha")
+    print("Old Computer Manager v0.8.0-alpha")
     print("Generating health report...\n")
 
     store = SnapshotStore()
@@ -586,7 +586,7 @@ def cmd_serve(args: argparse.Namespace) -> int:
     """Start the local read-only API server."""
     import uvicorn
 
-    print("Old Computer Manager v0.7.0-alpha")
+    print("Old Computer Manager v0.8.0-alpha")
     print(f"Starting API server on {args.host}:{args.port}")
     print("This server is intended for localhost use only.")
     print("Press Ctrl+C to stop.\n")
@@ -604,7 +604,7 @@ def cmd_ai(args: argparse.Namespace) -> int:
     """Generate AI advisory from the latest completed report."""
     from app.ai.runner import run_advisory, run_advisory_json, AdvisoryRunnerError
 
-    print("Old Computer Manager v0.7.0-alpha")
+    print("Old Computer Manager v0.8.0-alpha")
     print("AI Advisory (local-first, read-only)\n")
 
     try:
@@ -675,6 +675,107 @@ def cmd_ai(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_history(args: argparse.Namespace) -> int:
+    """Display historical trend analysis."""
+    from app.history.runner import run_history, run_history_json
+
+    print("Old Computer Manager v0.8.0-alpha")
+    print("Historical Trend Analysis (read-only)\n")
+
+    store = SnapshotStore()
+
+    if getattr(args, "json_output", False):
+        print(run_history_json(store, limit=getattr(args, "limit", None)))
+        return 0
+
+    summary = run_history(
+        store,
+        limit=getattr(args, "limit", None),
+        metric=getattr(args, "metric", None),
+    )
+
+    if summary.runs_considered == 0:
+        print("No completed discovery runs found.")
+        print("Run 'old-computer-manager discover' first to collect data.")
+        return 0
+
+    print(f"Runs analyzed:  {summary.runs_considered}")
+    print(f"Run IDs:        {', '.join(str(r) for r in summary.run_ids)}")
+    print(f"Observations:   {summary.observations_available}")
+    print()
+
+    if summary.trends:
+        print("TRENDS")
+        print("-" * 60)
+        for t in summary.trends:
+            direction_marker = {
+                "increasing": "[UP]",
+                "decreasing": "[DOWN]",
+                "stable": "[--]",
+                "insufficient_data": "[??]",
+            }.get(t.direction, "[?]")
+            print(f"  {direction_marker} {t.metric_name}")
+            print(f"    Observations: {t.observations_count}")
+            print(f"    First: {t.first_value} ({t.first_timestamp})")
+            print(f"    Latest: {t.latest_value} ({t.latest_timestamp})")
+            if t.delta_absolute is not None:
+                print(f"    Delta: {t.delta_absolute:+.2f} ({t.delta_percent:+.1f}%)")
+            print()
+
+    if summary.baseline:
+        print("BASELINE COMPARISON")
+        print("-" * 60)
+        for b in summary.baseline:
+            status_marker = {
+                "unavailable": "[--]",
+                "established": "[OK]",
+                "improved": "[UP]",
+                "degraded": "[DOWN]",
+                "unchanged": "[--]",
+                "insufficient_data": "[??]",
+            }.get(b.baseline_status, "[?]")
+            print(f"  {status_marker} {b.metric_name}")
+            print(f"    Status:     {b.baseline_status}")
+            if b.baseline_value is not None:
+                print(f"    Baseline:   {b.baseline_value} (run {b.baseline_run_id})")
+            if b.current_value is not None:
+                print(f"    Current:    {b.current_value}")
+            if b.delta is not None:
+                print(f"    Delta:      {b.delta:+.2f} ({b.delta_percent:+.1f}%)")
+            print()
+
+    if summary.recurring_findings:
+        print("RECURRING FINDINGS")
+        print("-" * 60)
+        for r in summary.recurring_findings:
+            severity_marker = {
+                "critical": "[CRITICAL]",
+                "warning": "[WARNING]",
+                "info": "[INFO]",
+            }.get(r.severity, "[?]")
+            print(f"  {severity_marker} {r.title}")
+            print(f"    Analyzer:    {r.analyzer}")
+            print(f"    Occurrences: {r.occurrence_count} runs")
+            print(f"    First seen:  {r.first_seen}")
+            print(f"    Last seen:   {r.last_seen}")
+            print()
+
+    if summary.anomalies:
+        print("ANOMALIES")
+        print("-" * 60)
+        for a in summary.anomalies:
+            severity_marker = {
+                "critical": "[CRITICAL]",
+                "warning": "[WARNING]",
+                "info": "[INFO]",
+            }.get(a.severity, "[?]")
+            print(f"  {severity_marker} {a.title}")
+            print(f"    {a.message}")
+            print()
+
+    print("NOTE: This is descriptive historical analysis, not predictive failure forecasting.")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         prog="old-computer-manager",
@@ -741,6 +842,21 @@ def main() -> int:
         help="Output advisory as JSON",
     )
 
+    # history subcommand
+    history_parser = sub.add_parser("history", help="Historical trend analysis (read-only)")
+    history_parser.add_argument(
+        "--json", action="store_true", dest="json_output",
+        help="Output history as JSON",
+    )
+    history_parser.add_argument(
+        "--limit", type=int, default=None,
+        help="Maximum number of runs to consider",
+    )
+    history_parser.add_argument(
+        "--metric", type=str, default=None,
+        help="Filter to a specific metric",
+    )
+
     # actions subcommand with sub-subcommands
     actions_parser = sub.add_parser("actions", help="Manage remediation actions")
     actions_sub = actions_parser.add_subparsers(dest="actions_command")
@@ -790,6 +906,8 @@ def main() -> int:
         return cmd_ai(args)
     if args.command == "analyze":
         return cmd_analyze(args)
+    if args.command == "history":
+        return cmd_history(args)
     if args.command == "files":
         if args.files_command == "scan":
             return cmd_files_scan(args)

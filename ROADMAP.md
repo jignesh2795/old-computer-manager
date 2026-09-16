@@ -4,7 +4,25 @@ This document tracks completed milestones and potential future directions for Ol
 
 ## Completed Milestones
 
-### v0.5.0-alpha — Local Computer Intelligence Core ✓
+### v0.8.0-alpha — Historical Trends + Baseline Comparison ✓
+
+**Status**: Released 2026-09-16
+
+**Capabilities**:
+- Historical trend analysis across multiple discovery runs
+- Baseline comparison with battery-specific rules
+- Recurring findings detection
+- Simple anomaly detection (sudden changes)
+- 14 trackable metrics (storage, battery, hardware, counts)
+- CLI: `history`, `history --json`, `--limit`, `--metric`
+- API: `/api/v1/history/summary`, `/trends`, `/baseline`, `/anomalies`
+- Dashboard Historical section
+- AI context with historical summaries
+- 498 tests passing
+
+---
+
+### v0.7.0-alpha — Lightweight Local Dashboard ✓
 
 **Status**: Released 2026-09-16
 

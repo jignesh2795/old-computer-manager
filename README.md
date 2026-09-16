@@ -4,7 +4,7 @@ A local-first, read-only computer intelligence system for understanding, diagnos
 
 ## Version
 
-**v0.7.0-alpha** — Lightweight Local Dashboard
+**v0.8.0-alpha** — Historical Trends + Baseline Comparison
 
 ## Purpose
 
@@ -104,6 +104,23 @@ Generates a local-first AI advisory from the latest completed report. The AI pro
 
 **Important**: The AI advisory is read-only. It does NOT execute remediation, modify the system, or access secrets.
 
+### Historical Analysis
+
+```bash
+old-computer-manager history
+old-computer-manager history --json
+old-computer-manager history --limit 20
+old-computer-manager history --metric storage_C:\_percent_used
+```
+
+Analyzes historical trends across multiple discovery runs. Shows:
+- **Trends**: Increasing, decreasing, or stable metrics over time
+- **Baseline**: Comparison against earliest valid observation
+- **Recurring findings**: Findings that appear across multiple runs
+- **Anomalies**: Sudden changes (storage increase, battery health drop, etc.)
+
+**Important**: This is descriptive historical analysis, not predictive failure forecasting.
+
 ### Remediation Actions
 
 ```bash
@@ -138,6 +155,7 @@ The dashboard provides a lightweight, read-only web interface for visualizing sy
 - **Battery**: Charge, health, wear, cycle count when available
 - **AI Advisory**: Observations, recommendations, uncertainties, limitations
 - **Remediation**: Registered actions metadata (informational only, no execution controls)
+- **Historical**: Trends, baselines, recurring findings, anomalies across runs
 
 The dashboard consumes the existing FastAPI API and does not access SQLite directly.
 
@@ -158,6 +176,10 @@ All endpoints are GET-only and read-only. The server binds to localhost only.
 | `GET /api/v1/remediation/actions` | Remediation action metadata only |
 | `GET /api/v1/system` | System information |
 | `GET /api/v1/ai/advisory` | AI advisory (read-only, uses mock provider) |
+| `GET /api/v1/history/summary` | Historical analysis with trends, baselines, anomalies |
+| `GET /api/v1/history/trends` | Trend analysis for all metrics |
+| `GET /api/v1/history/baseline` | Baseline comparison for all metrics |
+| `GET /api/v1/history/anomalies` | Detected anomalies in historical data |
 
 ### Interactive Documentation
 
@@ -221,6 +243,49 @@ AI context is bounded to prevent excessive data exposure:
 - Battery serial numbers excluded (only boolean `serial_number_present`)
 - File contents excluded (only metadata)
 - Secrets never included in context
+
+### Historical Analysis
+
+The historical analysis system tracks how the computer changes across multiple discovery runs.
+
+#### Trend Semantics
+
+- **increasing**: Metric has increased beyond the stability threshold
+- **decreasing**: Metric has decreased beyond the stability threshold
+- **stable**: Change is within the stability threshold
+- **insufficient_data**: Not enough observations to determine trend
+
+#### Baseline Semantics
+
+- **unavailable**: No valid baseline observation exists
+- **established**: Baseline exists but no comparison yet
+- **improved**: Current value is better than baseline
+- **degraded**: Current value is worse than baseline (exceeds threshold)
+- **unchanged**: Change is within the threshold
+- **insufficient_data**: Cannot determine comparison
+
+#### Battery Baseline Rule
+
+Battery health baseline requires valid health_percent data. A dead battery (0% health) does not establish a baseline. The baseline is only established once:
+- design capacity exists
+- full-charge capacity exists
+- health_percent is calculable
+
+#### Recurring Findings
+
+Findings that appear across multiple discovery runs are tracked with:
+- First seen / last seen timestamps
+- Occurrence count (number of runs)
+- Run IDs where the finding appeared
+
+#### Anomaly Limitations
+
+Anomaly detection is simple and explainable:
+- Sudden storage increase (>10 percentage points between runs)
+- Sudden battery health drop (>10 percentage points between runs)
+- Unusual startup/software count changes (>50% / >20% relative change)
+
+This is **not** machine learning anomaly detection. It describes measured changes without speculative causal claims.
 
 ### Available Remediation
 
@@ -341,7 +406,7 @@ npm test
 ```
 
 Current baseline:
-- **Backend**: 451 passed, 3 skipped, 0 failures
+- **Backend**: 498 passed, 3 skipped, 0 failures
 - **Frontend**: 13 passed, 0 failures
 
 ### Project Structure
@@ -359,6 +424,7 @@ app/
   reporting/                # Report builder and formatter
   api/                      # FastAPI server
   ai/                       # AI advisory layer
+  history/                  # Historical trend analysis
 frontend/
   src/                      # React TypeScript source
     components/             # Dashboard components

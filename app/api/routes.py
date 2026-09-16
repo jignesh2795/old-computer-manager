@@ -11,19 +11,25 @@ from app.api.schemas import (
     AdvisoryMetadataResponse,
     AdvisoryResponse,
     BatteryResponse,
+    BaselineResponse,
+    DataQualityResponse,
     ErrorResponse,
     FileAnalysisResponse,
     FindingResponse,
     FindingsResponse,
+    HistorySummaryResponse,
     LimitationResponse,
     ObservationResponse,
+    AnomalyResponse,
     RecommendationResponse,
+    RecurringFindingResponse,
     RemediationActionResponse,
     RemediationActionsResponse,
     ReportResponse,
     StoragePartitionResponse,
     StorageResponse,
     SystemResponse,
+    TrendResponse,
     UncertaintyResponse,
 )
 from app.reporting.models import HealthReport
@@ -395,3 +401,183 @@ def get_ai_advisory_endpoint(report: HealthReport = Depends(get_report)) -> Advi
             generated_at=advisory.metadata.generated_at,
         ),
     )
+
+
+# -- Historical analysis endpoints -------------------------------------------
+
+
+@router.get("/history/summary", response_model=HistorySummaryResponse, tags=["history"])
+def get_history_summary(
+    limit: int | None = Query(None, description="Maximum number of runs to consider"),
+    metric: str | None = Query(None, description="Filter to specific metric"),
+    store: SnapshotStore = Depends(get_store),
+) -> HistorySummaryResponse:
+    """Return historical analysis summary with trends, baselines, and anomalies.
+
+    This endpoint analyzes existing discovery run data. It does not
+    trigger any new discovery, analysis, or filesystem operations.
+    """
+    from app.history.runner import run_history
+
+    summary = run_history(store, limit=limit, metric=metric)
+
+    return HistorySummaryResponse(
+        runs_considered=summary.runs_considered,
+        observations_available=summary.observations_available,
+        run_ids=list(summary.run_ids),
+        trends=[
+            TrendResponse(
+                metric_name=t.metric_name,
+                observations_count=t.observations_count,
+                first_value=t.first_value,
+                latest_value=t.latest_value,
+                minimum=t.minimum,
+                maximum=t.maximum,
+                delta_absolute=t.delta_absolute,
+                delta_percent=t.delta_percent,
+                direction=t.direction.value,
+                first_timestamp=t.first_timestamp,
+                latest_timestamp=t.latest_timestamp,
+            )
+            for t in summary.trends
+        ],
+        baseline=[
+            BaselineResponse(
+                metric_name=b.metric_name,
+                baseline_run_id=b.baseline_run_id,
+                baseline_timestamp=b.baseline_timestamp,
+                baseline_value=b.baseline_value,
+                current_value=b.current_value,
+                delta=b.delta,
+                delta_percent=b.delta_percent,
+                baseline_status=b.baseline_status.value,
+            )
+            for b in summary.baseline
+        ],
+        recurring_findings=[
+            RecurringFindingResponse(
+                analyzer=r.analyzer,
+                severity=r.severity,
+                title=r.title,
+                first_seen=r.first_seen,
+                last_seen=r.last_seen,
+                occurrence_count=r.occurrence_count,
+                run_ids=list(r.run_ids),
+            )
+            for r in summary.recurring_findings
+        ],
+        anomalies=[
+            AnomalyResponse(
+                metric_name=a.metric_name,
+                severity=a.severity,
+                title=a.title,
+                message=a.message,
+                evidence=a.evidence,
+                first_detected=a.first_detected,
+                last_detected=a.last_detected,
+                occurrence_count=a.occurrence_count,
+            )
+            for a in summary.anomalies
+        ],
+        data_quality=[
+            DataQualityResponse(
+                metric_name=d.metric_name,
+                total_observations=d.total_observations,
+                valid_observations=d.valid_observations,
+                missing_count=d.missing_count,
+                not_supported_count=d.not_supported_count,
+                failed_count=d.failed_count,
+            )
+            for d in summary.data_quality
+        ],
+    )
+
+
+@router.get("/history/trends", response_model=list[TrendResponse], tags=["history"])
+def get_history_trends(
+    limit: int | None = Query(None, description="Maximum number of runs to consider"),
+    metric: str | None = Query(None, description="Filter to specific metric"),
+    store: SnapshotStore = Depends(get_store),
+) -> list[TrendResponse]:
+    """Return trend analysis for historical metrics.
+
+    This endpoint analyzes existing discovery run data.
+    """
+    from app.history.runner import run_history
+
+    summary = run_history(store, limit=limit, metric=metric)
+
+    return [
+        TrendResponse(
+            metric_name=t.metric_name,
+            observations_count=t.observations_count,
+            first_value=t.first_value,
+            latest_value=t.latest_value,
+            minimum=t.minimum,
+            maximum=t.maximum,
+            delta_absolute=t.delta_absolute,
+            delta_percent=t.delta_percent,
+            direction=t.direction.value,
+            first_timestamp=t.first_timestamp,
+            latest_timestamp=t.latest_timestamp,
+        )
+        for t in summary.trends
+    ]
+
+
+@router.get("/history/baseline", response_model=list[BaselineResponse], tags=["history"])
+def get_history_baseline(
+    limit: int | None = Query(None, description="Maximum number of runs to consider"),
+    metric: str | None = Query(None, description="Filter to specific metric"),
+    store: SnapshotStore = Depends(get_store),
+) -> list[BaselineResponse]:
+    """Return baseline comparison for historical metrics.
+
+    This endpoint analyzes existing discovery run data.
+    """
+    from app.history.runner import run_history
+
+    summary = run_history(store, limit=limit, metric=metric)
+
+    return [
+        BaselineResponse(
+            metric_name=b.metric_name,
+            baseline_run_id=b.baseline_run_id,
+            baseline_timestamp=b.baseline_timestamp,
+            baseline_value=b.baseline_value,
+            current_value=b.current_value,
+            delta=b.delta,
+            delta_percent=b.delta_percent,
+            baseline_status=b.baseline_status.value,
+        )
+        for b in summary.baseline
+    ]
+
+
+@router.get("/history/anomalies", response_model=list[AnomalyResponse], tags=["history"])
+def get_history_anomalies(
+    limit: int | None = Query(None, description="Maximum number of runs to consider"),
+    metric: str | None = Query(None, description="Filter to specific metric"),
+    store: SnapshotStore = Depends(get_store),
+) -> list[AnomalyResponse]:
+    """Return detected anomalies in historical data.
+
+    This endpoint analyzes existing discovery run data.
+    """
+    from app.history.runner import run_history
+
+    summary = run_history(store, limit=limit, metric=metric)
+
+    return [
+        AnomalyResponse(
+            metric_name=a.metric_name,
+            severity=a.severity,
+            title=a.title,
+            message=a.message,
+            evidence=a.evidence,
+            first_detected=a.first_detected,
+            last_detected=a.last_detected,
+            occurrence_count=a.occurrence_count,
+        )
+        for a in summary.anomalies
+    ]

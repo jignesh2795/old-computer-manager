@@ -10,6 +10,7 @@ import type {
   FileAnalysisResponse,
   RemediationActionsResponse,
   SystemResponse,
+  HistorySummaryResponse,
 } from './types/api'
 import { Overview } from './components/Overview'
 import { Findings } from './components/Findings'
@@ -19,6 +20,7 @@ import { FileAnalysis } from './components/FileAnalysis'
 import { AiAdvisory } from './components/AiAdvisory'
 import { Remediation } from './components/Remediation'
 import { System } from './components/System'
+import { Historical } from './components/Historical'
 
 interface DashboardData {
   report: ReportResponse | null
@@ -29,6 +31,7 @@ interface DashboardData {
   fileAnalysis: FileAnalysisResponse | null
   remediation: RemediationActionsResponse | null
   system: SystemResponse | null
+  history: HistorySummaryResponse | null
 }
 
 function App() {
@@ -41,6 +44,7 @@ function App() {
     fileAnalysis: null,
     remediation: null,
     system: null,
+    history: null,
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -60,6 +64,7 @@ function App() {
         fileAnalysis,
         remediation,
         system,
+        history,
       ] = await Promise.all([
         api.report().catch(() => null),
         api.advisory().catch(() => null),
@@ -69,6 +74,7 @@ function App() {
         api.fileAnalysis().catch(() => null),
         api.remediationActions().catch(() => null),
         api.system().catch(() => null),
+        api.history().catch(() => null),
       ])
 
       setData({
@@ -80,6 +86,7 @@ function App() {
         fileAnalysis,
         remediation,
         system,
+        history,
       })
       setLastFetch(new Date().toLocaleTimeString())
     } catch (err) {
@@ -128,6 +135,7 @@ function App() {
           <AiAdvisory advisory={data.advisory} />
           <Remediation remediation={data.remediation} />
           <FileAnalysis fileAnalysis={data.fileAnalysis} />
+          <Historical history={data.history} />
         </div>
       )}
     </div>

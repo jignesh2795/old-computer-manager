@@ -516,3 +516,158 @@ class SnapshotStore:
                 }
                 for row in cursor.fetchall()
             ]
+
+    # -- Historical query methods --------------------------------------------
+
+    def get_completed_runs(
+        self, limit: int | None = None, since_id: int | None = None
+    ) -> list[dict[str, Any]]:
+        """Return completed discovery runs, newest first.
+
+        Args:
+            limit: Maximum number of runs to return. None means all.
+            since_id: Only return runs with id > since_id.
+
+        Returns:
+            List of run dicts with keys: id, started_at, completed_at, status, analysis_status.
+        """
+        with self._connect() as connection:
+            query = (
+                "SELECT id, started_at, completed_at, status, analysis_status "
+                "FROM discovery_runs "
+                "WHERE status IN ('completed', 'completed_with_errors')"
+            )
+            params: list[Any] = []
+            if since_id is not None:
+                query += " AND id > ?"
+                params.append(since_id)
+            query += " ORDER BY id DESC"
+            if limit is not None:
+                query += " LIMIT ?"
+                params.append(limit)
+            cursor = connection.execute(query, params)
+            return [
+                {
+                    "id": row[0],
+                    "started_at": row[1],
+                    "completed_at": row[2],
+                    "status": row[3],
+                    "analysis_status": row[4],
+                }
+                for row in cursor.fetchall()
+            ]
+
+    def get_all_runs(self, limit: int | None = None) -> list[dict[str, Any]]:
+        """Return all discovery runs (any status), newest first."""
+        with self._connect() as connection:
+            query = (
+                "SELECT id, started_at, completed_at, status, analysis_status "
+                "FROM discovery_runs ORDER BY id DESC"
+            )
+            params: list[Any] = []
+            if limit is not None:
+                query += " LIMIT ?"
+                params.append(limit)
+            cursor = connection.execute(query, params)
+            return [
+                {
+                    "id": row[0],
+                    "started_at": row[1],
+                    "completed_at": row[2],
+                    "status": row[3],
+                    "analysis_status": row[4],
+                }
+                for row in cursor.fetchall()
+            ]
+
+    def get_snapshots_for_runs(
+        self, run_ids: list[int], category: str
+    ) -> list[dict[str, Any]]:
+        """Return snapshots for multiple runs, ordered by collected_at.
+
+        Only returns snapshots with status='ok'.
+
+        Args:
+            run_ids: List of run IDs to query.
+            category: Snapshot category (e.g. 'storage', 'battery').
+
+        Returns:
+            List of dicts with keys: run_id, collected_at, payload.
+        """
+        if not run_ids:
+            return []
+        placeholders = ",".join("?" for _ in run_ids)
+        with self._connect() as connection:
+            cursor = connection.execute(
+                f"SELECT run_id, collected_at, payload_json "
+                f"FROM snapshots "
+                f"WHERE run_id IN ({placeholders}) "
+                f"AND category = ? AND status = 'ok' "
+                f"ORDER BY collected_at",
+                [*run_ids, category],
+            )
+            return [
+                {
+                    "run_id": row[0],
+                    "collected_at": row[1],
+                    "payload": json.loads(row[2]),
+                }
+                for row in cursor.fetchall()
+            ]
+
+    def get_findings_for_runs(
+        self, run_ids: list[int]
+    ) -> list[dict[str, Any]]:
+        """Return findings for multiple runs, ordered by created_at.
+
+        Args:
+            run_ids: List of run IDs to query.
+
+        Returns:
+            List of finding dicts.
+        """
+        if not run_ids:
+            return []
+        placeholders = ",".join("?" for _ in run_ids)
+        with self._connect() as connection:
+            cursor = connection.execute(
+                f"SELECT run_id, analyzer, severity, title, message, "
+                f"       evidence_json, recommendation, created_at "
+                f"FROM findings "
+                f"WHERE run_id IN ({placeholders}) "
+                f"ORDER BY created_at",
+                run_ids,
+            )
+            return [
+                {
+                    "run_id": row[0],
+                    "analyzer": row[1],
+                    "severity": row[2],
+                    "title": row[3],
+                    "message": row[4],
+                    "evidence": json.loads(row[5]) if row[5] else None,
+                    "recommendation": row[6],
+                    "created_at": row[7],
+                }
+                for row in cursor.fetchall()
+            ]
+
+    def count_snapshots_by_category(
+        self, run_ids: list[int]
+    ) -> dict[str, int]:
+        """Count snapshots per category across multiple runs.
+
+        Returns:
+            Dict mapping category name to total count.
+        """
+        if not run_ids:
+            return {}
+        placeholders = ",".join("?" for _ in run_ids)
+        with self._connect() as connection:
+            cursor = connection.execute(
+                f"SELECT category, COUNT(*) FROM snapshots "
+                f"WHERE run_id IN ({placeholders}) AND status = 'ok' "
+                f"GROUP BY category",
+                run_ids,
+            )
+            return {row[0]: row[1] for row in cursor.fetchall()}

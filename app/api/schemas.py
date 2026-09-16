@@ -191,3 +191,72 @@ class AdvisoryResponse(BaseModel):
     uncertainties: list[UncertaintyResponse] = []
     limitations: list[LimitationResponse] = []
     metadata: AdvisoryMetadataResponse = AdvisoryMetadataResponse()
+
+
+# Historical analysis schemas
+
+
+class TrendResponse(BaseModel):
+    metric_name: str
+    observations_count: int
+    first_value: float | None = None
+    latest_value: float | None = None
+    minimum: float | None = None
+    maximum: float | None = None
+    delta_absolute: float | None = None
+    delta_percent: float | None = None
+    direction: str
+    first_timestamp: str | None = None
+    latest_timestamp: str | None = None
+
+
+class BaselineResponse(BaseModel):
+    metric_name: str
+    baseline_run_id: int | None = None
+    baseline_timestamp: str | None = None
+    baseline_value: float | None = None
+    current_value: float | None = None
+    delta: float | None = None
+    delta_percent: float | None = None
+    baseline_status: str
+
+
+class RecurringFindingResponse(BaseModel):
+    analyzer: str
+    severity: str
+    title: str
+    first_seen: str | None = None
+    last_seen: str | None = None
+    occurrence_count: int = 0
+    run_ids: list[int] = []
+
+
+class AnomalyResponse(BaseModel):
+    metric_name: str
+    severity: str
+    title: str
+    message: str
+    evidence: dict[str, Any] = {}
+    first_detected: str | None = None
+    last_detected: str | None = None
+    occurrence_count: int = 0
+
+
+class DataQualityResponse(BaseModel):
+    metric_name: str
+    total_observations: int
+    valid_observations: int
+    missing_count: int = 0
+    not_supported_count: int = 0
+    failed_count: int = 0
+
+
+class HistorySummaryResponse(BaseModel):
+    runs_considered: int = 0
+    observations_available: int = 0
+    run_ids: list[int] = []
+    trends: list[TrendResponse] = []
+    baseline: list[BaselineResponse] = []
+    recurring_findings: list[RecurringFindingResponse] = []
+    anomalies: list[AnomalyResponse] = []
+    data_quality: list[DataQualityResponse] = []

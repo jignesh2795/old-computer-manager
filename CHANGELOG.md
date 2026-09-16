@@ -4,6 +4,57 @@ All notable changes to Old Computer Manager will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [v0.8.0-alpha] - 2026-09-16
+
+### Phase 8A — Historical Trends + Baseline Comparison
+
+This release adds historical analysis capabilities for tracking system changes over time.
+
+### Added
+
+#### Historical Analysis (Phase 8A)
+- `app/history/` package with models, repository, metrics, trends, anomalies, baseline, and runner
+- Trend calculation with configurable thresholds (increasing, decreasing, stable, insufficient_data)
+- Baseline comparison with battery-specific rules (degradation threshold, health establishment)
+- Recurring findings detection across multiple discovery runs
+- Simple anomaly detection (sudden storage increase, battery health drop, startup/software count changes)
+- 14 trackable metrics across storage, battery, hardware, and count categories
+- Partition identity via normalized device paths
+- Run selection (completed runs only, last N, since ID)
+- Data quality tracking (valid, missing, not_supported, failed)
+
+#### API Endpoints
+- `GET /api/v1/history/summary` — Full historical analysis summary
+- `GET /api/v1/history/trends` — Trend analysis for all metrics
+- `GET /api/v1/history/baseline` — Baseline comparison for all metrics
+- `GET /api/v1/history/anomalies` — Detected anomalies
+
+#### CLI Commands
+- `old-computer-manager history` — Human-readable historical analysis
+- `old-computer-manager history --json` — JSON output
+- `--limit` — Maximum runs to consider
+- `--metric` — Filter to specific metric
+
+#### Dashboard
+- Historical section showing trends, baselines, recurring findings, and anomalies
+
+#### AI Context
+- Extended AI context builder with bounded historical summaries
+- Battery baseline awareness for advisory generation
+
+### Safety
+- All endpoints are GET-only (read-only)
+- No new modification authority
+- No subprocess, shell, registry, or network calls
+- No new database schema changes (uses existing tables)
+- 47 new tests covering all historical analysis features
+
+### Test Baseline
+- **Backend**: 498 passed, 3 skipped, 0 failures
+- **Frontend**: 13 passed, 0 failures
+
+---
+
 ## [v0.7.0-alpha] - 2026-09-16
 
 ### Phase 7A — Lightweight Local Dashboard

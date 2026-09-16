@@ -179,3 +179,71 @@ export interface AdvisoryResponse {
   limitations: LimitationResponse[]
   metadata: AdvisoryMetadataResponse
 }
+
+// Historical analysis types
+
+export interface TrendResponse {
+  metric_name: string
+  observations_count: number
+  first_value: number | null
+  latest_value: number | null
+  minimum: number | null
+  maximum: number | null
+  delta_absolute: number | null
+  delta_percent: number | null
+  direction: string
+  first_timestamp: string | null
+  latest_timestamp: string | null
+}
+
+export interface BaselineResponse {
+  metric_name: string
+  baseline_run_id: number | null
+  baseline_timestamp: string | null
+  baseline_value: number | null
+  current_value: number | null
+  delta: number | null
+  delta_percent: number | null
+  baseline_status: string
+}
+
+export interface RecurringFindingResponse {
+  analyzer: string
+  severity: string
+  title: string
+  first_seen: string | null
+  last_seen: string | null
+  occurrence_count: number
+  run_ids: number[]
+}
+
+export interface AnomalyResponse {
+  metric_name: string
+  severity: string
+  title: string
+  message: string
+  evidence: Record<string, unknown>
+  first_detected: string | null
+  last_detected: string | null
+  occurrence_count: number
+}
+
+export interface DataQualityResponse {
+  metric_name: string
+  total_observations: number
+  valid_observations: number
+  missing_count: number
+  not_supported_count: number
+  failed_count: number
+}
+
+export interface HistorySummaryResponse {
+  runs_considered: number
+  observations_available: number
+  run_ids: number[]
+  trends: TrendResponse[]
+  baseline: BaselineResponse[]
+  recurring_findings: RecurringFindingResponse[]
+  anomalies: AnomalyResponse[]
+  data_quality: DataQualityResponse[]
+}

@@ -21,6 +21,9 @@ MAX_STARTUP_ITEMS: int = 15
 MAX_TEXT_LENGTH: int = 500
 MAX_OBSERVATIONS: int = 10
 MAX_RECOMMENDATIONS: int = 5
+MAX_HISTORICAL_TRENDS: int = 10
+MAX_HISTORICAL_RECURRING: int = 5
+MAX_HISTORICAL_ANOMALIES: int = 5
 
 # Sensitive fields to exclude
 SENSITIVE_FIELDS: set[str] = {
@@ -50,6 +53,7 @@ class AIContext:
     startup_summary: dict[str, Any] = field(default_factory=dict)
     process_summary: dict[str, Any] = field(default_factory=dict)
     remediation_metadata: list[dict[str, Any]] = field(default_factory=list)
+    historical_summary: dict[str, Any] = field(default_factory=dict)
     analysis_status: str | None = None
     errors: list[dict[str, Any]] = field(default_factory=list)
 
@@ -219,6 +223,72 @@ def _build_errors(report: HealthReport) -> list[dict[str, Any]]:
     return errors
 
 
+def _build_historical_summary(report: HealthReport) -> dict[str, Any]:
+    """Build bounded historical summary from HealthReport.
+
+    If historical data is available, include summarized trends,
+    baselines, recurring findings, and anomalies.
+    """
+    # Check if historical section exists in report
+    historical = getattr(report, "historical", None)
+    if historical is None:
+        return {"available": False}
+
+    # The historical section is an optional dict in the report
+    if not isinstance(historical, dict):
+        return {"available": False}
+
+    result: dict[str, Any] = {
+        "available": True,
+        "runs_considered": historical.get("runs_considered", 0),
+    }
+
+    # Cap trends
+    trends = historical.get("trends", [])
+    if trends:
+        result["trends"] = [
+            {
+                "metric_name": _truncate_text(t.get("metric_name", ""), 50),
+                "direction": t.get("direction", "unknown"),
+                "observations_count": t.get("observations_count", 0),
+                "delta_percent": t.get("delta_percent"),
+            }
+            for t in trends[:MAX_HISTORICAL_TRENDS]
+        ]
+
+    # Cap recurring findings
+    recurring = historical.get("recurring_findings", [])
+    if recurring:
+        result["recurring_findings"] = [
+            {
+                "title": _truncate_text(r.get("title", ""), 100),
+                "analyzer": r.get("analyzer", ""),
+                "occurrence_count": r.get("occurrence_count", 0),
+            }
+            for r in recurring[:MAX_HISTORICAL_RECURRING]
+        ]
+
+    # Cap anomalies
+    anomalies = historical.get("anomalies", [])
+    if anomalies:
+        result["anomalies"] = [
+            {
+                "title": _truncate_text(a.get("title", ""), 100),
+                "severity": a.get("severity", "info"),
+                "message": _truncate_text(a.get("message", ""), 200),
+            }
+            for a in anomalies[:MAX_HISTORICAL_ANOMALIES]
+        ]
+
+    # Battery baseline
+    baseline = historical.get("baseline", [])
+    battery_baseline = [b for b in baseline if "health" in b.get("metric_name", "")]
+    if battery_baseline:
+        result["battery_baseline"] = battery_baseline[0]
+
+    return result
+
+
 def build_ai_context(report: HealthReport) -> AIContext:
     """Build bounded AI context from HealthReport.
 
@@ -243,6 +313,7 @@ def build_ai_context(report: HealthReport) -> AIContext:
         startup_summary=_build_startup_summary(report),
         process_summary=_build_process_summary(report),
         remediation_metadata=_build_remediation_metadata(report),
+        historical_summary=_build_historical_summary(report),
         analysis_status=report.analysis_status,
         errors=_build_errors(report),
     )
