@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import psutil
 
+from app.collectors.result import CollectorResult
 
-def collect() -> list[dict[str, object]]:
+
+def collect_result() -> CollectorResult:
     """Collect mounted filesystem information without modifying anything."""
     results: list[dict[str, object]] = []
     for partition in psutil.disk_partitions(all=False):
@@ -37,4 +39,5 @@ def collect() -> list[dict[str, object]]:
                     "percent_used": None,
                 }
             )
-    return results
+    status = "ok" if results else "empty"
+    return CollectorResult(payload=results, status=status)

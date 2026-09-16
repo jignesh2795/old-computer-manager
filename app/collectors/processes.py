@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import psutil
 
+from app.collectors.result import CollectorResult
 
-def collect() -> list[dict[str, object]]:
+
+def collect_result() -> CollectorResult:
     results: list[dict[str, object]] = []
     for process in psutil.process_iter(["pid", "name", "username", "cpu_percent", "memory_info", "create_time"]):
         try:
@@ -23,4 +25,6 @@ def collect() -> list[dict[str, object]]:
             )
         except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
             continue
-    return sorted(results, key=lambda item: item.get("memory_rss_bytes") or 0, reverse=True)
+    results.sort(key=lambda item: item.get("memory_rss_bytes") or 0, reverse=True)
+    status = "ok" if results else "empty"
+    return CollectorResult(payload=results, status=status)

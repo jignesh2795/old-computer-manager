@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import platform
 
+from app.collectors.result import CollectorResult
 from app.collectors.windows import _powershell_json
 
 
@@ -15,10 +16,12 @@ Get-CimInstance Win32_Service |
 """
 
 
-def collect() -> list[object]:
+def collect_result() -> CollectorResult:
     if platform.system() != "Windows":
-        return []
-    result = _powershell_json(SERVICES_SCRIPT)
-    if result is None:
-        return []
-    return result if isinstance(result, list) else [result]
+        return CollectorResult(payload=[], status="not_supported")
+    result, error = _powershell_json(SERVICES_SCRIPT)
+    if error:
+        return CollectorResult(payload=[], status="failed", error_message=error)
+    items = result if isinstance(result, list) else [result] if result is not None else []
+    status = "ok" if items else "empty"
+    return CollectorResult(payload=items, status=status)

@@ -6,6 +6,8 @@ import platform
 import psutil
 from dataclasses import asdict, dataclass
 
+from app.collectors.result import CollectorResult
+
 
 @dataclass(frozen=True)
 class HardwareSnapshot:
@@ -32,6 +34,6 @@ def collect() -> HardwareSnapshot:
     )
 
 
-def collect_dict() -> dict[str, object]:
+def collect_result() -> CollectorResult:
     """Return a JSON/SQLite-friendly representation of the snapshot."""
-    return asdict(collect())
+    return CollectorResult(payload=asdict(collect()), status="ok")

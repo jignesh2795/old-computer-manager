@@ -4,11 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "old-computer-manager"
-version = "0.1.0a0"
+version = "0.5.0a0"
 description = "Local-first discovery and diagnostics for older computers"
 requires-python = ">=3.11"
 dependencies = [
     "psutil>=6.0,<7",
+    "fastapi>=0.100.0,<1",
+    "uvicorn[standard]>=0.23.0,<1",
 ]
 
 [project.scripts]
@@ -16,3 +18,6 @@ old-computer-manager = "app.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["app*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
