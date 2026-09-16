@@ -4,6 +4,45 @@ All notable changes to Old Computer Manager will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [v0.7.0-alpha] - 2026-09-16
+
+### Phase 7A — Lightweight Local Dashboard
+
+This release adds a local read-only web dashboard for visualizing system data.
+
+### Added
+
+#### Dashboard (Phase 7A)
+- `frontend/` directory with Vite + React + TypeScript setup
+- Dashboard components: Overview, Findings, Storage, Battery, FileAnalysis, AiAdvisory, Remediation, System
+- TypeScript types matching existing FastAPI API schemas
+- API service layer consuming existing read-only endpoints
+- Manual Refresh button (no continuous polling)
+- Compact card-based layout designed for older computers
+- Status visualization: normal, warning, critical, not available, not analyzed
+- Progress bars for storage utilization
+- Findings display with severity, title, message, evidence, recommendation
+- AI Advisory section showing observations, recommendations, uncertainties, limitations
+- Remediation metadata display (informational only, no execution controls)
+- Graceful error handling for API failures, missing data, analysis not run
+- Production build configuration
+- 13 frontend tests covering all dashboard sections
+
+#### Safety
+- Dashboard is read-only (no POST/PUT/PATCH/DELETE endpoints)
+- No execution controls (Apply/Execute/Delete/Cleanup buttons)
+- No filesystem access from frontend
+- No shell execution
+- No external telemetry or analytics
+- Localhost-only API connection
+- TypeScript types enforce read-only contract
+
+### Test Baseline
+- **Backend**: 451 passed, 3 skipped, 0 failures
+- **Frontend**: 13 passed, 0 failures
+
+---
+
 ## [v0.6.0-alpha] - 2026-09-16
 
 ### Phase 6A — Local-First AI Advisory Layer

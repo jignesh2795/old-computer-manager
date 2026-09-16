@@ -4,7 +4,7 @@ A local-first, read-only computer intelligence system for understanding, diagnos
 
 ## Version
 
-**v0.5.0-alpha** — Local Computer Intelligence Core
+**v0.7.0-alpha** — Lightweight Local Dashboard
 
 ## Purpose
 
@@ -41,6 +41,7 @@ Collectors -> SQLite Knowledge Base -> Analyzers -> Reports/API -> (Future: AI/U
 | **Reporting** | Unified health report builder with human-readable and deterministic JSON export |
 | **API** | Local read-only FastAPI server for programmatic access |
 | **Remediation** | Safety framework with validation, confirmation tokens, controlled execution, and rollback |
+| **Dashboard** | Lightweight React frontend for local visualization (read-only) |
 
 ## CLI Commands
 
@@ -116,6 +117,31 @@ old-computer-manager actions rollback <record_id>
 - **preview**: Show what an action would do without executing
 - **execute**: Execute an action with validation and confirmation
 - **rollback**: Restore a quarantined file to its original location
+
+### Web Dashboard
+
+```bash
+# Start backend API server
+old-computer-manager serve
+
+# Start frontend development server
+cd frontend
+npm install
+npm run dev
+```
+
+The dashboard provides a lightweight, read-only web interface for visualizing system data:
+
+- **Overview**: System model, OS, CPU, RAM, storage summary, battery status
+- **Findings**: Critical/warning/info analysis results with clear not-run vs completed states
+- **Storage**: Partition usage with progress visualization
+- **Battery**: Charge, health, wear, cycle count when available
+- **AI Advisory**: Observations, recommendations, uncertainties, limitations
+- **Remediation**: Registered actions metadata (informational only, no execution controls)
+
+The dashboard consumes the existing FastAPI API and does not access SQLite directly.
+
+**Important**: The dashboard is read-only. It contains NO Apply/Execute/Delete/Cleanup buttons.
 
 ## API Endpoints
 
@@ -287,8 +313,6 @@ Do not consider the baseline established until these steps are actually performe
 
 These features are **not implemented** and exist only as potential directions:
 
-- AI advisory layer for intelligent recommendations
-- React dashboard for visualization
 - Monitoring daemon for continuous observation
 - Additional remediation actions
 - Broader platform support (macOS, Linux)
@@ -308,10 +332,17 @@ pip install -e ".[dev]"
 ### Running Tests
 
 ```bash
+# Python backend tests
 pytest tests/ -v
+
+# Frontend tests
+cd frontend
+npm test
 ```
 
-Current baseline: **397 passed, 3 skipped, 0 failures**
+Current baseline:
+- **Backend**: 451 passed, 3 skipped, 0 failures
+- **Frontend**: 13 passed, 0 failures
 
 ### Project Structure
 
@@ -327,6 +358,13 @@ app/
   remediation/              # Safety framework and quarantine
   reporting/                # Report builder and formatter
   api/                      # FastAPI server
+  ai/                       # AI advisory layer
+frontend/
+  src/                      # React TypeScript source
+    components/             # Dashboard components
+    types/                  # TypeScript type definitions
+    api/                    # API client layer
+  dist/                     # Production build output
 tests/                      # Comprehensive test suite
 data/                       # SQLite database (runtime)
 ```
