@@ -136,6 +136,12 @@ class RemediationActionMeta:
     preview_available: bool = False
     rollback_available: bool = False
     real_execution_exists: bool = False
+    implementation_status: str = "not_implemented"
+    blast_radius: str = "single_file"
+    rollback_category: str = "not_applicable"
+    eligibility: str = "requires_design_review"
+    category: str = "general"
+    action_version: str = "1"
 
 
 @dataclass(frozen=True)

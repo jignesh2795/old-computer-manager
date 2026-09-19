@@ -202,6 +202,12 @@ def _build_remediation_summary() -> RemediationSummary:
                 preview_available=preview_available,
                 rollback_available=rollback_available,
                 real_execution_exists=real_execution_exists,
+                implementation_status=action.implementation_status.value,
+                blast_radius=action.blast_radius.value,
+                rollback_category=action.rollback_category.value,
+                eligibility=action.eligibility.value,
+                category=action.category,
+                action_version=action.action_version,
             )
         )
     return RemediationSummary(actions=actions)

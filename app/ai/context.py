@@ -197,6 +197,8 @@ def _build_remediation_metadata(report: HealthReport) -> list[dict[str, Any]]:
     """Build remediation metadata from HealthReport.
 
     This only includes action metadata, never execution capability.
+    Includes Phase 9A extended fields: implementation_status,
+    blast_radius, rollback_category, eligibility.
     """
     actions = []
     for a in report.remediation.actions[:5]:  # Cap at 5 actions
@@ -206,6 +208,11 @@ def _build_remediation_metadata(report: HealthReport) -> list[dict[str, Any]]:
             "risk_level": a.risk_level,
             "reversible": a.reversible,
             "requires_admin": a.requires_admin,
+            "implementation_status": a.implementation_status,
+            "blast_radius": a.blast_radius,
+            "rollback_category": a.rollback_category,
+            "eligibility": a.eligibility,
+            "category": a.category,
         })
     return actions
 

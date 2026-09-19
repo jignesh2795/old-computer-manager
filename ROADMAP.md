@@ -4,6 +4,23 @@ This document tracks completed milestones and potential future directions for Ol
 
 ## Completed Milestones
 
+### v0.9.1-alpha — Remediation Action Framework Expansion ✓
+
+**Status**: 2026-09-18 (unreleased)
+
+**Capabilities**:
+- Structured action catalog with risk model, eligibility, blast radius, rollback categories
+- Eligibility gate: single decision point for action execution eligibility
+- Action model extended with implementation_status, blast_radius, rollback_category, dependencies, eligibility, action_version, category
+- Registry validates against catalog (consistency check)
+- Audit trail persists action_version and implementation_status
+- AI prompt v1.2 with remediation action rules (distinguish implemented/proposed/blocked)
+- Frontend filters demo/test actions, shows implementation status
+- Only `user_temp_quarantine` is the production remediation action
+- 56 new tests, 598 total backend tests, 13 frontend tests
+
+---
+
 ### v0.9.0-alpha — Historical AI Reasoning ✓
 
 **Status**: Released 2026-09-16

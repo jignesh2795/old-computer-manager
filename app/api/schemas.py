@@ -110,6 +110,12 @@ class RemediationActionResponse(BaseModel):
     preview_available: bool
     rollback_available: bool
     real_execution_exists: bool
+    implementation_status: str = "not_implemented"
+    blast_radius: str = "single_file"
+    rollback_category: str = "not_applicable"
+    eligibility: str = "requires_design_review"
+    category: str = "general"
+    action_version: str = "1"
 
 
 class RemediationActionsResponse(BaseModel):
@@ -176,7 +182,7 @@ class LimitationResponse(BaseModel):
 class AdvisoryMetadataResponse(BaseModel):
     provider: str = ""
     model: str = ""
-    prompt_version: str = "1.1"
+    prompt_version: str = "1.2"
     generated_at: str = ""
 
 

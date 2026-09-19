@@ -5,7 +5,14 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from app.remediation.action import RemediationAction, RiskLevel
+from app.remediation.action import (
+    BlastRadius,
+    EligibilityStatus,
+    ImplementationStatus,
+    RemediationAction,
+    RiskLevel,
+    RollbackCategory,
+)
 
 
 class DuplicateActionError(Exception):
@@ -88,6 +95,42 @@ class ActionRegistry:
         """Return the number of registered actions."""
         return len(self._actions)
 
+    def validate_against_catalog(self) -> list[str]:
+        """Validate all registered actions against the catalog.
+
+        Returns a list of error strings.  Empty list means all actions
+        are consistent with the catalog.
+        """
+        from app.remediation.catalog import get_catalog_entry
+
+        errors: list[str] = []
+        for action_id, action in self._actions.items():
+            entry = get_catalog_entry(action_id)
+            if entry is None:
+                errors.append(
+                    f"Registered action '{action_id}' is not in the catalog."
+                )
+                continue
+            if action.implementation_status != entry.implementation_status:
+                errors.append(
+                    f"Action '{action_id}' implementation_status mismatch: "
+                    f"registry={action.implementation_status.value}, "
+                    f"catalog={entry.implementation_status.value}."
+                )
+            if action.blast_radius != entry.blast_radius:
+                errors.append(
+                    f"Action '{action_id}' blast_radius mismatch: "
+                    f"registry={action.blast_radius.value}, "
+                    f"catalog={entry.blast_radius.value}."
+                )
+            if action.eligibility != entry.eligibility:
+                errors.append(
+                    f"Action '{action_id}' eligibility mismatch: "
+                    f"registry={action.eligibility.value}, "
+                    f"catalog={entry.eligibility.value}."
+                )
+        return errors
+
 
 def validate_parameters(
     parameters: dict[str, Any],
@@ -144,6 +187,7 @@ def create_default_registry() -> ActionRegistry:
     """Create a registry with all permitted remediation actions.
 
     Includes demo/no-op actions and the first real action (user_temp_quarantine).
+    Demo actions are explicitly marked category="demo/test".
     """
     registry = ActionRegistry()
 
@@ -161,6 +205,11 @@ def create_default_registry() -> ActionRegistry:
             reversible=True,
             preview="Would print a confirmation message to stdout (simulated).",
             idempotent=True,
+            implementation_status=ImplementationStatus.IMPLEMENTED,
+            blast_radius=BlastRadius.SINGLE_FILE,
+            rollback_category=RollbackCategory.NOT_APPLICABLE,
+            eligibility=EligibilityStatus.ELIGIBLE,
+            category="demo/test",
         ),
         parameter_schema=ParameterSchema(
             required={"message"},
@@ -184,6 +233,11 @@ def create_default_registry() -> ActionRegistry:
             reversible=True,
             preview="Would report current system status (simulated).",
             idempotent=True,
+            implementation_status=ImplementationStatus.IMPLEMENTED,
+            blast_radius=BlastRadius.SINGLE_FILE,
+            rollback_category=RollbackCategory.NOT_APPLICABLE,
+            eligibility=EligibilityStatus.ELIGIBLE,
+            category="demo/test",
         ),
         parameter_schema=ParameterSchema(
             required=set(),
@@ -213,6 +267,11 @@ def create_default_registry() -> ActionRegistry:
                 "the age threshold into quarantine.  Files are moved, not deleted."
             ),
             idempotent=True,
+            implementation_status=ImplementationStatus.IMPLEMENTED,
+            blast_radius=BlastRadius.USER_DIRECTORY,
+            rollback_category=RollbackCategory.SHUTIL_MOVE_RESTORE,
+            eligibility=EligibilityStatus.ELIGIBLE,
+            category="cleanup",
         ),
         parameter_schema=ParameterSchema(
             required=set(),

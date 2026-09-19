@@ -733,9 +733,9 @@ class TestExistingTestsUnaffected:
         assert isinstance(advisory, AIAdvisory)
         assert advisory.summary
 
-    def test_prompt_version_is_1_1(self):
-        """R. Prompt version is 1.1."""
-        assert AI_PROMPT_VERSION == "1.1"
+    def test_prompt_version_is_1_2(self):
+        """R. Prompt version is 1.2 (updated in Phase 9A)."""
+        assert AI_PROMPT_VERSION == "1.2"
 
     def test_system_prompt_contains_historical_rules(self):
         """R. System prompt contains historical reasoning rules."""

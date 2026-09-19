@@ -68,6 +68,8 @@ class AuditRecord:
     Attributes:
         id: Database primary key (set after insertion).
         action_id: The registered action identifier.
+        action_version: Version of the action definition at time of execution.
+        implementation_status: Implementation status at time of execution.
         finding_id: Originating finding ID, if any.
         discovery_run_id: Originating discovery run ID, if any.
         requested_at: When the action was first proposed.
@@ -82,6 +84,8 @@ class AuditRecord:
     """
 
     action_id: str
+    action_version: str = "1"
+    implementation_status: str = "not_implemented"
     finding_id: int | None = None
     discovery_run_id: int | None = None
     requested_at: str | None = None
@@ -100,6 +104,8 @@ AUDIT_TABLE = """
 CREATE TABLE IF NOT EXISTS remediation_audit (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     action_id TEXT NOT NULL,
+    action_version TEXT NOT NULL DEFAULT '1',
+    implementation_status TEXT NOT NULL DEFAULT 'not_implemented',
     finding_id INTEGER,
     discovery_run_id INTEGER,
     requested_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -157,6 +163,24 @@ class AuditStore:
             )
             if cursor.fetchone() is None:
                 connection.executescript(AUDIT_TABLE)
+            else:
+                # Migration: add action_version and implementation_status
+                # columns if they don't exist (backward compatible).
+                cursor = connection.execute(
+                    "PRAGMA table_info(remediation_audit)"
+                )
+                columns = {row[1] for row in cursor.fetchall()}
+                if "action_version" not in columns:
+                    connection.execute(
+                        "ALTER TABLE remediation_audit "
+                        "ADD COLUMN action_version TEXT NOT NULL DEFAULT '1'"
+                    )
+                if "implementation_status" not in columns:
+                    connection.execute(
+                        "ALTER TABLE remediation_audit "
+                        "ADD COLUMN implementation_status "
+                        "TEXT NOT NULL DEFAULT 'not_implemented'"
+                    )
             connection.executescript(AUDIT_INDEXES)
 
     def create_record(self, record: AuditRecord) -> int:
@@ -164,12 +188,15 @@ class AuditStore:
         with self._connect() as connection:
             cursor = connection.execute(
                 "INSERT INTO remediation_audit("
-                "  action_id, finding_id, discovery_run_id, requested_at,"
+                "  action_id, action_version, implementation_status,"
+                "  finding_id, discovery_run_id, requested_at,"
                 "  executed_at, status, risk_level, target, reason,"
                 "  result_summary, rollback_available, error_message"
-                ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     record.action_id,
+                    record.action_version,
+                    record.implementation_status,
                     record.finding_id,
                     record.discovery_run_id,
                     record.requested_at or _now(),
@@ -242,7 +269,8 @@ class AuditStore:
         """Load a single audit record by ID."""
         with self._connect() as connection:
             cursor = connection.execute(
-                "SELECT id, action_id, finding_id, discovery_run_id,"
+                "SELECT id, action_id, action_version, implementation_status,"
+                "  finding_id, discovery_run_id,"
                 "  requested_at, executed_at, status, risk_level,"
                 "  target, reason, result_summary, rollback_available,"
                 "  error_message "
@@ -279,7 +307,8 @@ class AuditStore:
 
         with self._connect() as connection:
             cursor = connection.execute(
-                f"SELECT id, action_id, finding_id, discovery_run_id,"
+                f"SELECT id, action_id, action_version,"
+                f"  implementation_status, finding_id, discovery_run_id,"
                 f"  requested_at, executed_at, status, risk_level,"
                 f"  target, reason, result_summary, rollback_available,"
                 f"  error_message "
@@ -300,15 +329,17 @@ def _row_to_record(row: tuple) -> AuditRecord:
     return AuditRecord(
         id=row[0],
         action_id=row[1],
-        finding_id=row[2],
-        discovery_run_id=row[3],
-        requested_at=row[4],
-        executed_at=row[5],
-        status=row[6],
-        risk_level=row[7],
-        target=row[8],
-        reason=row[9],
-        result_summary=row[10],
-        rollback_available=bool(row[11]),
-        error_message=row[12],
+        action_version=row[2],
+        implementation_status=row[3],
+        finding_id=row[4],
+        discovery_run_id=row[5],
+        requested_at=row[6],
+        executed_at=row[7],
+        status=row[8],
+        risk_level=row[9],
+        target=row[10],
+        reason=row[11],
+        result_summary=row[12],
+        rollback_available=bool(row[13]),
+        error_message=row[14],
     )

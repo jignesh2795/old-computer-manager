@@ -4,7 +4,7 @@ A local-first, read-only computer intelligence system for understanding, diagnos
 
 ## Version
 
-**v0.9.0-alpha** — Historical AI Reasoning
+**v0.9.1-alpha** — Remediation Action Framework Expansion
 
 ## Purpose
 

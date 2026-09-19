@@ -4,6 +4,64 @@ All notable changes to Old Computer Manager will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [v0.9.1-alpha] - 2026-09-18
+
+### Phase 9A — Remediation Action Framework Expansion
+
+This release expands the remediation framework with structured metadata for action lifecycle, risk, eligibility, blast radius, rollback design, and dependencies. No new real remediation actions are implemented — only `user_temp_quarantine` remains as the sole production action. All proposed/blocked/not_implemented actions remain non-executable. All implemented actions require explicit human confirmation through the controlled remediation workflow.
+
+### Added
+
+#### Remediation Action Model (Phase 9A)
+- `ImplementationStatus` enum: implemented, proposed, blocked, not_implemented
+- `BlastRadius` enum: single_file, user_directory, user_profile, system_wide, bootloader
+- `RollbackCategory` enum: shutil_move_restore, registry_restore, service_restore, startup_restore, snapshot_restore, not_applicable
+- `EligibilityStatus` enum: eligible, blocked, requires_design_review, requires_privilege_review, requires_rollback_design
+- `RemediationAction` extended with 7 new fields: implementation_status, blast_radius, rollback_category, dependencies, eligibility, action_version, category (backward compatible defaults)
+- Action dependencies: tuple of action_ids this action depends on
+- Explicit human confirmation: all implemented actions require confirmation tokens through the controlled remediation workflow
+
+#### Action Catalog (Phase 9A)
+- `app/remediation/catalog.py`: Structured catalog of all known remediation actions
+- 13 catalog entries: 1 production implemented, 2 demo/test, 6 blocked, 4 proposed
+- `validate_catalog_consistency()` enforces invariants (blocked not eligible, demos categorized)
+- `get_production_entries()` returns only non-demo actions
+
+#### Action Eligibility Gate (Phase 9A)
+- `app/remediation/eligibility.py`: Single decision point for action eligibility
+- `check_eligibility(action_id)` returns EligibilityResult with status and reason
+- `is_action_allowed(action_id)` quick check for execution eligibility
+- `get_blocked_actions()`, `get_proposed_actions()`, `get_implemented_production_actions()`
+
+#### Registry Validation (Phase 9A)
+- `ActionRegistry.validate_against_catalog()` checks all registered actions match catalog metadata
+
+#### Audit Schema (Phase 9A)
+- `AuditRecord` extended with `action_version` and `implementation_status` fields
+- `AUDIT_TABLE` schema includes new columns
+- Backward-compatible migration: existing databases automatically get new columns
+
+#### AI Advisory (Phase 9A)
+- AI prompt v1.2 with REMEDIATION ACTION RULES (rules 8-14)
+- AI distinguishes implemented vs proposed vs blocked actions
+- AI never recommends blocked or not_implemented actions
+- AI context includes implementation_status, blast_radius, rollback_category, eligibility
+
+#### API (Phase 9A)
+- `RemediationActionResponse` extended with implementation_status, blast_radius, rollback_category, eligibility, category, action_version
+
+#### Frontend (Phase 9A)
+- Remediation dashboard filters out demo/test actions
+- Shows implementation status tags (Implemented/Proposed/Blocked/Not Implemented)
+- Shows production action count separately from total registered count
+- Shows blast radius metadata
+
+#### Tests (Phase 9A)
+- 56 new tests covering catalog, eligibility, action model, registry validation, audit migration, and security invariants
+- Total: 598 backend tests passing, 13 frontend tests passing
+
+---
+
 ## [v0.9.0-alpha] - 2026-09-16
 
 ### Phase 8B — Historical AI Reasoning

@@ -19,6 +19,60 @@ class RiskLevel(str, Enum):
     CRITICAL = "critical"
 
 
+class ImplementationStatus(str, Enum):
+    """Whether an action is implemented, proposed, or blocked.
+
+    Only IMPLEMENTED actions may be executed through the controlled
+    remediation workflow.  All other statuses are informational.
+    """
+
+    IMPLEMENTED = "implemented"
+    PROPOSED = "proposed"
+    BLOCKED = "blocked"
+    NOT_IMPLEMENTED = "not_implemented"
+
+
+class BlastRadius(str, Enum):
+    """Scope of system impact if action misbehaves.
+
+    Used to communicate blast radius during risk review.
+    """
+
+    SINGLE_FILE = "single_file"
+    USER_DIRECTORY = "user_directory"
+    USER_PROFILE = "user_profile"
+    SYSTEM_WIDE = "system_wide"
+    BOOTLOADER = "bootloader"
+
+
+class RollbackCategory(str, Enum):
+    """How rollback is achieved for an action.
+
+    NOT_APPLICABLE means no rollback mechanism is implemented.
+    """
+
+    SHUTIL_MOVE_RESTORE = "shutil_move_restore"
+    REGISTRY_RESTORE = "registry_restore"
+    SERVICE_RESTORE = "service_restore"
+    STARTUP_RESTORE = "startup_restore"
+    SNAPSHOT_RESTORE = "snapshot_restore"
+    NOT_APPLICABLE = "not_applicable"
+
+
+class EligibilityStatus(str, Enum):
+    """Whether an action is eligible for execution.
+
+    Only ELIGIBLE actions may proceed through the confirmation and
+    execution pipeline.
+    """
+
+    ELIGIBLE = "eligible"
+    BLOCKED = "blocked"
+    REQUIRES_DESIGN_REVIEW = "requires_design_review"
+    REQUIRES_PRIVILEGE_REVIEW = "requires_privilege_review"
+    REQUIRES_ROLLBACK_DESIGN = "requires_rollback_design"
+
+
 @dataclass(frozen=True)
 class RemediationAction:
     """A proposed remediation action.  Immutable.
@@ -42,6 +96,13 @@ class RemediationAction:
         parameters: Arbitrary key-value pairs for the action implementation.
         idempotent: Whether repeating this action is safe when the state
                     already matches the desired outcome.
+        implementation_status: Lifecycle status of this action definition.
+        blast_radius: Scope of system impact if action misbehaves.
+        rollback_category: How rollback is achieved.
+        dependencies: Action IDs this action depends on.
+        eligibility: Whether this action is eligible for execution.
+        action_version: Version of the action definition schema.
+        category: Functional category (e.g. "cleanup", "security", "demo/test").
     """
 
     action_id: str
@@ -57,6 +118,13 @@ class RemediationAction:
     preview: str = ""
     parameters: dict[str, Any] = field(default_factory=dict)
     idempotent: bool = False
+    implementation_status: ImplementationStatus = ImplementationStatus.NOT_IMPLEMENTED
+    blast_radius: BlastRadius = BlastRadius.SINGLE_FILE
+    rollback_category: RollbackCategory = RollbackCategory.NOT_APPLICABLE
+    dependencies: tuple[str, ...] = ()
+    eligibility: EligibilityStatus = EligibilityStatus.REQUIRES_DESIGN_REVIEW
+    action_version: str = "1"
+    category: str = "general"
 
     def __post_init__(self) -> None:
         # Validate risk_level is a valid RiskLevel member.

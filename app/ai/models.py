@@ -74,7 +74,7 @@ class AdvisoryMetadata:
 
     provider: str = ""
     model: str = ""
-    prompt_version: str = "1.1"
+    prompt_version: str = "1.2"
     generated_at: str = ""
     context_tokens_estimate: int = 0
     usage: dict[str, Any] = field(default_factory=dict)
