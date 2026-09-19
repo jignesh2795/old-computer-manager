@@ -14,6 +14,8 @@ from app.api.schemas import (
     BatteryResponse,
     BaselineResponse,
     DataQualityResponse,
+    DiagnosticResultResponse,
+    DiagnosticsSummaryResponse,
     ErrorResponse,
     FileAnalysisResponse,
     FindingResponse,
@@ -608,3 +610,99 @@ def get_history_anomalies(
         )
         for a in summary.anomalies
     ]
+
+
+# ── Diagnostic endpoints (read-only) ─────────────────────────────────────
+
+
+def _get_diagnostic_results(
+    store: SnapshotStore, category: str | None = None
+) -> DiagnosticsSummaryResponse:
+    """Helper to load the latest diagnostic results."""
+    diag_run = store.get_latest_diagnostic_run()
+    if diag_run is None:
+        return DiagnosticsSummaryResponse()
+
+    run_id = diag_run["id"]
+    if category:
+        results = store.get_diagnostic_results_by_category(run_id, category)
+    else:
+        results = store.load_diagnostic_results(run_id)
+
+    categories = sorted(set(r.get("category", "") for r in results if r.get("category")))
+    status_counts: dict[str, int] = {}
+    for r in results:
+        s = r.get("status", "unknown")
+        status_counts[s] = status_counts.get(s, 0) + 1
+
+    return DiagnosticsSummaryResponse(
+        available=True,
+        run_id=run_id,
+        status=diag_run.get("status"),
+        result_count=len(results),
+        categories=categories,
+        status_counts=status_counts,
+        results=[
+            DiagnosticResultResponse(
+                diagnostic_id=r["diagnostic_id"],
+                category=r["category"],
+                status=r["status"],
+                title=r["title"],
+                summary=r["summary"],
+                evidence=r.get("evidence", {}),
+                source=r.get("source", ""),
+                collected_at=r.get("collected_at", ""),
+                limitations=r.get("limitations", []),
+                errors=r.get("errors", []),
+            )
+            for r in results
+        ],
+    )
+
+
+@router.get("/diagnostics/summary", response_model=DiagnosticsSummaryResponse, tags=["diagnostics"])
+def get_diagnostics_summary(
+    store: SnapshotStore = Depends(get_store),
+) -> DiagnosticsSummaryResponse:
+    """Return all diagnostic results from the latest diagnostic run."""
+    return _get_diagnostic_results(store)
+
+
+@router.get("/diagnostics/disk", response_model=DiagnosticsSummaryResponse, tags=["diagnostics"])
+def get_diagnostics_disk(
+    store: SnapshotStore = Depends(get_store),
+) -> DiagnosticsSummaryResponse:
+    """Return disk health diagnostic results."""
+    return _get_diagnostic_results(store, category="disk")
+
+
+@router.get("/diagnostics/thermal", response_model=DiagnosticsSummaryResponse, tags=["diagnostics"])
+def get_diagnostics_thermal(
+    store: SnapshotStore = Depends(get_store),
+) -> DiagnosticsSummaryResponse:
+    """Return thermal diagnostic results."""
+    return _get_diagnostic_results(store, category="thermal")
+
+
+@router.get("/diagnostics/performance", response_model=DiagnosticsSummaryResponse, tags=["diagnostics"])
+def get_diagnostics_performance(
+    store: SnapshotStore = Depends(get_store),
+) -> DiagnosticsSummaryResponse:
+    """Return performance diagnostic results."""
+    return _get_diagnostic_results(store, category="performance")
+
+
+@router.get("/diagnostics/devices", response_model=DiagnosticsSummaryResponse, tags=["diagnostics"])
+def get_diagnostics_devices(
+    store: SnapshotStore = Depends(get_store),
+) -> DiagnosticsSummaryResponse:
+    """Return device/driver diagnostic results."""
+    return _get_diagnostic_results(store, category="devices")
+
+
+@router.get("/diagnostics/windows", response_model=DiagnosticsSummaryResponse, tags=["diagnostics"])
+def get_diagnostics_windows(
+    store: SnapshotStore = Depends(get_store),
+) -> DiagnosticsSummaryResponse:
+    """Return Windows health diagnostic results."""
+    return _get_diagnostic_results(store, category="windows")

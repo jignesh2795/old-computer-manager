@@ -18,7 +18,7 @@ def cmd_discover(args: argparse.Namespace) -> int:
     """Run a full discovery scan."""
     from app.discovery import run
 
-    print("Old Computer Manager v0.10.0-alpha")
+    print("Old Computer Manager v0.11.0-alpha")
     print("Read-only discovery mode")
     print(f"Platform: {platform.platform()}")
     print(f"Python: {sys.version.split()[0]}")
@@ -39,7 +39,7 @@ def cmd_analyze(args: argparse.Namespace) -> int:
     """Analyze the latest completed discovery run."""
     from app.analyzers.runner import analyze_latest_run
 
-    print("Old Computer Manager v0.10.0-alpha")
+    print("Old Computer Manager v0.11.0-alpha")
     print("Read-only analysis mode\n")
 
     store = SnapshotStore()
@@ -63,7 +63,7 @@ def cmd_actions(args: argparse.Namespace) -> int:
     """List registered remediation actions."""
     from app.remediation.registry import create_default_registry
 
-    print("Old Computer Manager v0.10.0-alpha")
+    print("Old Computer Manager v0.11.0-alpha")
     print("Remediation actions\n")
 
     registry = create_default_registry()
@@ -95,7 +95,7 @@ def cmd_actions_preview(args: argparse.Namespace) -> int:
     from app.remediation.preview import preview_action
     import json as json_mod
 
-    print("Old Computer Manager v0.10.0-alpha")
+    print("Old Computer Manager v0.11.0-alpha")
     print(f"Action preview: {args.action_id}\n")
 
     registry = create_default_registry()
@@ -181,7 +181,7 @@ def cmd_actions_execute(args: argparse.Namespace) -> int:
     from app.remediation.audit import AuditStore
     import json as json_mod
 
-    print("Old Computer Manager v0.10.0-alpha")
+    print("Old Computer Manager v0.11.0-alpha")
     print(f"Execute action: {args.action_id}\n")
 
     registry = create_default_registry()
@@ -262,7 +262,7 @@ def cmd_actions_rollback(args: argparse.Namespace) -> int:
     from app.remediation.audit import AuditStore, AuditStatus
     from app.database.sqlite import SnapshotStore
 
-    print("Old Computer Manager v0.10.0-alpha")
+    print("Old Computer Manager v0.11.0-alpha")
     print(f"Rollback quarantine record: {args.record_id}\n")
 
     db_path = Path("data/computer.db")
@@ -310,7 +310,7 @@ def cmd_files_scan(args: argparse.Namespace) -> int:
     from app.file_analysis.runner import run_file_analysis
     from app.database.sqlite import SnapshotStore
 
-    print("Old Computer Manager v0.10.0-alpha")
+    print("Old Computer Manager v0.11.0-alpha")
     print(f"File scan: {args.path}\n")
 
     try:
@@ -418,7 +418,7 @@ def cmd_files_large(args: argparse.Namespace) -> int:
     from app.file_analysis.runner import run_file_analysis
     from app.database.sqlite import SnapshotStore
 
-    print("Old Computer Manager v0.10.0-alpha")
+    print("Old Computer Manager v0.11.0-alpha")
     print("Large file analysis\n")
 
     # Use provided path or latest scan
@@ -468,7 +468,7 @@ def cmd_files_types(args: argparse.Namespace) -> int:
     from app.file_analysis.runner import run_file_analysis
     from app.database.sqlite import SnapshotStore
 
-    print("Old Computer Manager v0.10.0-alpha")
+    print("Old Computer Manager v0.11.0-alpha")
     print("File type analysis\n")
 
     if args.path:
@@ -507,7 +507,7 @@ def cmd_files_duplicates(args: argparse.Namespace) -> int:
     from app.file_analysis.runner import run_file_analysis
     from app.database.sqlite import SnapshotStore
 
-    print("Old Computer Manager v0.10.0-alpha")
+    print("Old Computer Manager v0.11.0-alpha")
     print("Duplicate file analysis\n")
 
     if args.path:
@@ -572,7 +572,7 @@ def cmd_report(args: argparse.Namespace) -> int:
     from app.reporting.runner import generate_report, generate_json, generate_human
     from app.database.sqlite import SnapshotStore
 
-    print("Old Computer Manager v0.10.0-alpha")
+    print("Old Computer Manager v0.11.0-alpha")
     print("Generating health report...\n")
 
     store = SnapshotStore()
@@ -590,7 +590,7 @@ def cmd_serve(args: argparse.Namespace) -> int:
     """Start the local read-only API server."""
     import uvicorn
 
-    print("Old Computer Manager v0.10.0-alpha")
+    print("Old Computer Manager v0.11.0-alpha")
     print(f"Starting API server on {args.host}:{args.port}")
     print("This server is intended for localhost use only.")
     print("Press Ctrl+C to stop.\n")
@@ -608,7 +608,7 @@ def cmd_ai(args: argparse.Namespace) -> int:
     """Generate AI advisory from the latest completed report."""
     from app.ai.runner import run_advisory, run_advisory_json, AdvisoryRunnerError
 
-    print("Old Computer Manager v0.10.0-alpha")
+    print("Old Computer Manager v0.11.0-alpha")
     print("AI Advisory (local-first, read-only)\n")
 
     try:
@@ -698,7 +698,7 @@ def cmd_history(args: argparse.Namespace) -> int:
     """Display historical trend analysis."""
     from app.history.runner import run_history, run_history_json
 
-    print("Old Computer Manager v0.10.0-alpha")
+    print("Old Computer Manager v0.11.0-alpha")
     print("Historical Trend Analysis (read-only)\n")
 
     store = SnapshotStore()
@@ -793,6 +793,105 @@ def cmd_history(args: argparse.Namespace) -> int:
             print()
 
     print("NOTE: This is descriptive historical analysis, not predictive failure forecasting.")
+
+
+def cmd_diagnostics(args: argparse.Namespace) -> int:
+    """Run read-only advanced diagnostics."""
+    from app.diagnostics.runner import run_diagnostics, save_diagnostic_run
+
+    print("Old Computer Manager v0.11.0-alpha")
+    print("Advanced Diagnostics (read-only)\n")
+
+    category = getattr(args, "diagnostics_category", None)
+    valid_categories = {"disk", "thermal", "performance", "devices", "windows"}
+    if category and category not in valid_categories:
+        print(f"Unknown category: {category}")
+        print(f"Valid categories: {', '.join(sorted(valid_categories))}")
+        return 1
+
+    print("Running diagnostics...")
+    run = run_diagnostics()
+
+    # Filter by category if specified
+    results = run.results
+    if category:
+        results = [r for r in results if r.category.value == category]
+
+    # Save to database
+    store = SnapshotStore()
+    run_id = save_diagnostic_run(run, store)
+    if run_id:
+        print(f"Diagnostics saved (run_id={run_id})\n")
+
+    if getattr(args, "json_output", False):
+        output = {
+            "run_id": run_id,
+            "status": run.status,
+            "results": [
+                {
+                    "diagnostic_id": r.diagnostic_id,
+                    "category": r.category.value,
+                    "status": r.status.value,
+                    "title": r.title,
+                    "summary": r.summary,
+                    "evidence": r.evidence,
+                    "source": r.source,
+                    "limitations": r.limitations,
+                    "errors": r.errors,
+                }
+                for r in results
+            ],
+            "errors": run.errors,
+        }
+        print(json.dumps(output, indent=2, default=str))
+        return 0
+
+    # Human-readable output
+    status_icons = {
+        "ok": "[OK]",
+        "warning": "[WARN]",
+        "critical": "[CRIT]",
+        "unavailable": "[N/A]",
+        "not_supported": "[N/S]",
+        "failed": "[FAIL]",
+    }
+
+    current_category = None
+    for result in results:
+        cat = result.category.value
+        if cat != current_category:
+            current_category = cat
+            print(f"\n{'=' * 60}")
+            print(f"  {cat.upper()}")
+            print(f"{'=' * 60}")
+
+        icon = status_icons.get(result.status.value, "[?]")
+        print(f"\n  {icon} {result.title}")
+        print(f"    {result.summary}")
+        if result.source:
+            print(f"    Source: {result.source}")
+        if result.limitations:
+            for lim in result.limitations:
+                if lim:
+                    print(f"    Note: {lim}")
+        if result.errors:
+            for err in result.errors:
+                print(f"    Error: {err}")
+
+    if run.errors:
+        print(f"\nCollector errors ({len(run.errors)}):")
+        for err in run.errors:
+            print(f"  - {err.get('collector', '?')}: {err.get('error_message', '?')}")
+
+    counts = {}
+    for r in results:
+        s = r.status.value
+        counts[s] = counts.get(s, 0) + 1
+    print(f"\nSummary: {counts}")
+
+    print("\nNOTE: Diagnostics identify evidence and observations; they do not perform repairs.")
+
+    return 0
 
 
 def main() -> int:
@@ -915,6 +1014,17 @@ def main() -> int:
         help="Overwrite existing file at original path"
     )
 
+    # diagnostics subcommand
+    diag_parser = sub.add_parser("diagnostics", help="Run read-only advanced diagnostics")
+    diag_parser.add_argument(
+        "--json", action="store_true", dest="json_output",
+        help="Output diagnostics as JSON",
+    )
+    diag_parser.add_argument(
+        "diagnostics_category", nargs="?", default=None,
+        help="Specific category: disk, thermal, performance, devices, windows",
+    )
+
     args = parser.parse_args()
 
     if args.command == "report":
@@ -927,6 +1037,8 @@ def main() -> int:
         return cmd_analyze(args)
     if args.command == "history":
         return cmd_history(args)
+    if args.command == "diagnostics":
+        return cmd_diagnostics(args)
     if args.command == "files":
         if args.files_command == "scan":
             return cmd_files_scan(args)

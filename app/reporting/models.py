@@ -150,6 +150,17 @@ class RemediationSummary:
 
 
 @dataclass(frozen=True)
+class DiagnosticsSummary:
+    available: bool = False
+    run_id: int | None = None
+    status: str | None = None
+    result_count: int = 0
+    categories: list[str] = field(default_factory=list)
+    status_counts: dict[str, int] = field(default_factory=dict)
+    results: list[dict[str, Any]] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
 class ReportError:
     component: str = ""
     stage: str = ""
@@ -177,4 +188,5 @@ class HealthReport:
     scheduled_tasks: ScheduledTaskSummary = field(default_factory=ScheduledTaskSummary)
     file_analysis: FileAnalysisSummary = field(default_factory=FileAnalysisSummary)
     remediation: RemediationSummary = field(default_factory=RemediationSummary)
+    diagnostics: DiagnosticsSummary = field(default_factory=DiagnosticsSummary)
     errors: list[ReportError] = field(default_factory=list)

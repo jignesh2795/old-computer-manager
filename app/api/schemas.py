@@ -123,6 +123,29 @@ class RemediationActionsResponse(BaseModel):
     count: int
 
 
+class DiagnosticResultResponse(BaseModel):
+    diagnostic_id: str
+    category: str
+    status: str
+    title: str
+    summary: str
+    evidence: dict[str, Any] = {}
+    source: str = ""
+    collected_at: str = ""
+    limitations: list[str] = []
+    errors: list[str] = []
+
+
+class DiagnosticsSummaryResponse(BaseModel):
+    available: bool = False
+    run_id: int | None = None
+    status: str | None = None
+    result_count: int = 0
+    categories: list[str] = []
+    status_counts: dict[str, int] = {}
+    results: list[DiagnosticResultResponse] = []
+
+
 class ReportResponse(BaseModel):
     schema_version: str
     generated_at: str
@@ -142,6 +165,7 @@ class ReportResponse(BaseModel):
     scheduled_tasks: dict[str, Any]
     file_analysis: FileAnalysisResponse
     remediation: RemediationActionsResponse
+    diagnostics: DiagnosticsSummaryResponse = DiagnosticsSummaryResponse()
     errors: list[dict[str, Any]]
 
 

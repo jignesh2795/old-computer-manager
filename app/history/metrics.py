@@ -106,6 +106,29 @@ METRIC_DEFINITIONS: dict[str, MetricDefinition] = {
         description="Number of running processes",
         extract_from="list_length",
     ),
+
+    # Diagnostic metrics (from diagnostic_runs)
+    "diagnostic_cpu_percent": MetricDefinition(
+        name="diagnostic_cpu_percent",
+        category="diagnostics",
+        unit="%",
+        description="CPU utilization from diagnostic snapshot",
+        extract_from="dict_key",
+    ),
+    "diagnostic_memory_percent": MetricDefinition(
+        name="diagnostic_memory_percent",
+        category="diagnostics",
+        unit="%",
+        description="Memory utilization from diagnostic snapshot",
+        extract_from="dict_key",
+    ),
+    "diagnostic_device_problem_count": MetricDefinition(
+        name="diagnostic_device_problem_count",
+        category="diagnostics",
+        unit="count",
+        description="Number of devices reporting problems",
+        extract_from="dict_key",
+    ),
 }
 
 

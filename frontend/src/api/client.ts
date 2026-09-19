@@ -12,6 +12,7 @@ import type {
   SystemResponse,
   AdvisoryResponse,
   HistorySummaryResponse,
+  DiagnosticsSummaryResponse,
 } from '../types/api'
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8000'
@@ -35,4 +36,10 @@ export const api = {
   system: () => fetchJson<SystemResponse>('/api/v1/system'),
   advisory: () => fetchJson<AdvisoryResponse>('/api/v1/ai/advisory'),
   history: () => fetchJson<HistorySummaryResponse>('/api/v1/history/summary'),
+  diagnosticsSummary: () => fetchJson<DiagnosticsSummaryResponse>('/api/v1/diagnostics/summary'),
+  diagnosticsDisk: () => fetchJson<DiagnosticsSummaryResponse>('/api/v1/diagnostics/disk'),
+  diagnosticsThermal: () => fetchJson<DiagnosticsSummaryResponse>('/api/v1/diagnostics/thermal'),
+  diagnosticsPerformance: () => fetchJson<DiagnosticsSummaryResponse>('/api/v1/diagnostics/performance'),
+  diagnosticsDevices: () => fetchJson<DiagnosticsSummaryResponse>('/api/v1/diagnostics/devices'),
+  diagnosticsWindows: () => fetchJson<DiagnosticsSummaryResponse>('/api/v1/diagnostics/windows'),
 }

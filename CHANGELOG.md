@@ -4,6 +4,186 @@ All notable changes to Old Computer Manager will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [v0.11.0-alpha] - 2026-09-19
+
+### Phase 10A + 10A.1 — Read-Only Advanced Diagnostics + Quality Hardening
+
+This release adds 5 read-only diagnostic modules (disk health, thermal, performance, devices, Windows health) that inspect system state without modification. Each module runs independently with per-module failure isolation. Also adds 6 new GET-only API endpoints, CLI `diagnostics` command, dashboard Diagnostics section, and comprehensive test suite.
+
+#### Quality Hardening (10A.1)
+- Fixed memory diagnostic: `psutil.swap_memory()` failure no longer hides working `virtual_memory()` data. Memory now correctly reports as available when only swap is disabled (common on corporate Windows with disabled performance counters).
+- Fixed disk I/O semantics: cumulative bytes since boot are informational telemetry, not diagnostic warnings. Rate is measured via 1-second interval sampling. Only rate exceeding 100 MB/s produces a warning.
+- Snapshot-vs-trend wording reviewed: CPU and memory summaries read as snapshots ("utilization", "used"), not long-term conditions.
+- 8 new regression tests covering memory swap failure, disk I/O rate semantics, and snapshot wording.
+
+### Added
+
+#### Diagnostic Modules
+- `app/diagnostics/__init__.py`: Package exports
+- `app/diagnostics/models.py`: `DiagnosticResult`, `DiagnosticRun`, `DiagnosticStatus` (ok/warning/critical/unavailable/not_supported/failed), `DiagnosticCategory` (disk/thermal/performance/devices/windows)
+- `app/diagnostics/constants.py`: All thresholds centralized (CPU_HIGH_PERCENT=85, MEMORY_HIGH_PERCENT=85, DISK_IO_HIGH_READ_BYTES_PER_SEC=100MB/s, DISK_IO_HIGH_WRITE_BYTES_PER_SEC=100MB/s, CPU_TEMP_WARNING=80, CPU_TEMP_CRITICAL=95)
+- `app/diagnostics/_powershell.py`: Shared PowerShell helper (subprocess, timeout=20s, read-only)
+- `app/diagnostics/disk.py`: Disk health via Win32_DiskDrive/MSFT_PhysicalDisk (SMART status, predictive failure, temperature)
+- `app/diagnostics/thermal.py`: Thermal via psutil + MSAcpi_ThermalZoneTemperature (WMI Kelvin→Celsius conversion)
+- `app/diagnostics/performance.py`: CPU/memory/disk I/O/network I/O snapshot via psutil with rate-based I/O measurement
+- `app/diagnostics/devices.py`: Device/driver diagnostics via Win32_PnPEntity (ConfigManagerErrorCode problem detection)
+- `app/diagnostics/windows_health.py`: Windows health via Win32_OperatingSystem, reboot-required registry check, uptime, Win32_ReliabilityRecord
+- `app/diagnostics/analyzers.py`: Diagnostic→Finding conversion (conservative, observation-based)
+- `app/diagnostics/runner.py`: `run_diagnostics()` orchestrator with per-module isolation, `save_diagnostic_run()` persistence
+
+#### Database Integration
+- `diagnostic_runs` and `diagnostic_results` tables with indexes
+- Methods: `save_diagnostic_run()`, `get_latest_diagnostic_run()`, `load_diagnostic_results()`, `get_diagnostic_results_by_category()`, `get_diagnostic_summary()`
+
+#### Reporting Integration
+- `DiagnosticsSummary` model in `app/reporting/models.py`
+- `_build_diagnostics_summary()` in `app/reporting/builder.py`
+- `HealthReport.diagnostics` field
+
+#### AI Context Integration
+- `diagnostics_summary` field in `AIContext`
+- `_build_diagnostics_summary()` in `app/ai/context.py`
+- `MAX_DIAGNOSTIC_RESULTS = 20`
+
+#### History Integration
+- `diagnostic_cpu_percent`, `diagnostic_memory_percent`, `diagnostic_device_problem_count` metrics
+
+#### API Endpoints (6 new GET-only)
+- `GET /api/v1/diagnostics/summary` — Diagnostic run summary
+- `GET /api/v1/diagnostics/disk` — Disk health diagnostics
+- `GET /api/v1/diagnostics/thermal` — Thermal diagnostics
+- `GET /api/v1/diagnostics/performance` — Performance diagnostics
+- `GET /api/v1/diagnostics/devices` — Device/driver diagnostics
+- `GET /api/v1/diagnostics/windows` — Windows health diagnostics
+
+#### CLI Command
+- `old-computer-manager diagnostics [--json] [category]` with optional category filter
+
+#### Dashboard
+- `Diagnostics.tsx` component with per-category results display
+- Integrated into `App.tsx` with diagnosticsSummary fetch
+
+#### Tests
+- `tests/test_diagnostics.py`: 76+ tests covering models, parsing, SMART unavailable, predictive failure, thermal, performance, CPU/memory thresholds, disk I/O rate, device problems, Windows health, failure isolation, persistence, history, report, API, CLI, dashboard, AI context, security invariants, analyzers, runner, constants, data quality, PowerShell helper, memory swap failure, disk I/O cumulative vs rate, snapshot wording
+- **Backend**: 741 passed, 8 skipped, 0 failures
+- **Frontend**: 13 passed, 0 failures
+
+### Changed
+- `app/database/sqlite.py`: Added diagnostic tables and 6 new methods
+- `app/reporting/models.py`: Added DiagnosticsSummary model, HealthReport.diagnostics field
+- `app/reporting/builder.py`: Added `_build_diagnostics_summary()`
+- `app/ai/context.py`: Added diagnostics_summary field, `_build_diagnostics_summary()`, `MAX_DIAGNOSTIC_RESULTS`
+- `app/history/metrics.py`: Added 3 diagnostic metric definitions
+- `app/api/schemas.py`: Added DiagnosticResultResponse, DiagnosticsSummaryResponse
+- `app/api/routes.py`: Added 6 diagnostics endpoints + `_get_diagnostic_results()` helper
+- `app/cli.py`: Added `cmd_diagnostics()` + diagnostics subcommand parser
+- `frontend/src/types/api.ts`: Added diagnostic types
+- `frontend/src/api/client.ts`: Added 7 diagnostics API methods
+- `frontend/src/App.tsx`: Integrated Diagnostics component
+
+### Safety
+- All diagnostic modules are read-only (no system modification)
+- Per-module failure isolation — failure in one never aborts others
+- DiagnosticStatus distinguishes unavailable from hardware problem
+- No SMART health claims when platform doesn't expose it
+- No temperature inference from CPU load
+- No subjective performance scores
+- No causes invented — observation ≠ diagnosis
+- All thresholds centralized in constants.py
+- Subprocess only for PowerShell read-only commands (no shell=True, timeout=20s)
+- 6 new GET-only endpoints (no POST/execute/repair)
+- No new file writes, registry modifications, or system changes
+- Cumulative disk I/O is informational telemetry, not diagnostic signal
+- Rate-based disk I/O warnings only when measured rate exceeds threshold
+
+---
+
+## [v0.10.0-alpha] - 2026-09-19
+
+### Phase 10A — Read-Only Advanced Diagnostics Foundation
+
+This release adds 5 read-only diagnostic modules (disk health, thermal, performance, devices, Windows health) that inspect system state without modification. Each module runs independently with per-module failure isolation. Also adds 6 new GET-only API endpoints, CLI `diagnostics` command, dashboard Diagnostics section, and comprehensive test suite.
+
+### Added
+
+#### Diagnostic Modules (Phase 10A)
+- `app/diagnostics/__init__.py`: Package exports
+- `app/diagnostics/models.py`: `DiagnosticResult`, `DiagnosticRun`, `DiagnosticStatus` (ok/warning/critical/unavailable/not_supported/failed), `DiagnosticCategory` (disk/thermal/performance/devices/windows)
+- `app/diagnostics/constants.py`: All thresholds centralized (CPU_HIGH_PERCENT=85, MEMORY_HIGH_PERCENT=85, CPU_TEMP_WARNING=80, CPU_TEMP_CRITICAL=95, etc.)
+- `app/diagnostics/_powershell.py`: Shared PowerShell helper (subprocess, timeout=20s, read-only)
+- `app/diagnostics/disk.py`: Disk health via Win32_DiskDrive/MSFT_PhysicalDisk (SMART status, predictive failure, temperature)
+- `app/diagnostics/thermal.py`: Thermal via psutil + MSAcpi_ThermalZoneTemperature (WMI Kelvin→Celsius conversion)
+- `app/diagnostics/performance.py`: CPU/memory/disk I/O/network I/O snapshot via psutil
+- `app/diagnostics/devices.py`: Device/driver diagnostics via Win32_PnPEntity (ConfigManagerErrorCode problem detection)
+- `app/diagnostics/windows_health.py`: Windows health via Win32_OperatingSystem, reboot-required registry check, uptime, Win32_ReliabilityRecord
+- `app/diagnostics/analyzers.py`: Diagnostic→Finding conversion (conservative, observation-based)
+- `app/diagnostics/runner.py`: `run_diagnostics()` orchestrator with per-module isolation, `save_diagnostic_run()` persistence
+
+#### Database Integration
+- `diagnostic_runs` and `diagnostic_results` tables with indexes
+- Methods: `save_diagnostic_run()`, `get_latest_diagnostic_run()`, `load_diagnostic_results()`, `get_diagnostic_results_by_category()`, `get_diagnostic_summary()`
+
+#### Reporting Integration
+- `DiagnosticsSummary` model in `app/reporting/models.py`
+- `_build_diagnostics_summary()` in `app/reporting/builder.py`
+- `HealthReport.diagnostics` field
+
+#### AI Context Integration
+- `diagnostics_summary` field in `AIContext`
+- `_build_diagnostics_summary()` in `app/ai/context.py`
+- `MAX_DIAGNOSTIC_RESULTS = 20`
+
+#### History Integration
+- `diagnostic_cpu_percent`, `diagnostic_memory_percent`, `diagnostic_device_problem_count` metrics
+
+#### API Endpoints (6 new GET-only)
+- `GET /api/v1/diagnostics/summary` — Diagnostic run summary
+- `GET /api/v1/diagnostics/disk` — Disk health diagnostics
+- `GET /api/v1/diagnostics/thermal` — Thermal diagnostics
+- `GET /api/v1/diagnostics/performance` — Performance diagnostics
+- `GET /api/v1/diagnostics/devices` — Device/driver diagnostics
+- `GET /api/v1/diagnostics/windows` — Windows health diagnostics
+
+#### CLI Command
+- `old-computer-manager diagnostics [--json] [category]` with optional category filter
+
+#### Dashboard
+- `Diagnostics.tsx` component with per-category results display
+- Integrated into `App.tsx` with diagnosticsSummary fetch
+
+#### Tests
+- `tests/test_diagnostics.py`: 68+ new tests covering models, parsing, SMART unavailable, predictive failure, thermal, performance, CPU/memory thresholds, disk I/O, device problems, Windows health, failure isolation, persistence, history, report, API, CLI, dashboard, AI context, security invariants, analyzers, runner, constants, data quality, PowerShell helper
+- **Backend**: 733 passed, 8 skipped, 0 failures
+- **Frontend**: 13 passed, 0 failures
+
+### Changed
+- `app/database/sqlite.py`: Added diagnostic tables and 6 new methods
+- `app/reporting/models.py`: Added DiagnosticsSummary model, HealthReport.diagnostics field
+- `app/reporting/builder.py`: Added `_build_diagnostics_summary()`
+- `app/ai/context.py`: Added diagnostics_summary field, `_build_diagnostics_summary()`, `MAX_DIAGNOSTIC_RESULTS`
+- `app/history/metrics.py`: Added 3 diagnostic metric definitions
+- `app/api/schemas.py`: Added DiagnosticResultResponse, DiagnosticsSummaryResponse
+- `app/api/routes.py`: Added 6 diagnostics endpoints + `_get_diagnostic_results()` helper
+- `app/cli.py`: Added `cmd_diagnostics()` + diagnostics subcommand parser
+- `frontend/src/types/api.ts`: Added diagnostic types
+- `frontend/src/api/client.ts`: Added 7 diagnostics API methods
+- `frontend/src/App.tsx`: Integrated Diagnostics component
+
+### Safety
+- All diagnostic modules are read-only (no system modification)
+- Per-module failure isolation — failure in one never aborts others
+- DiagnosticStatus distinguishes unavailable from hardware problem
+- No SMART health claims when platform doesn't expose it
+- No temperature inference from CPU load
+- No subjective performance scores
+- No causes invented — observation ≠ diagnosis
+- All thresholds centralized in constants.py
+- Subprocess only for PowerShell read-only commands (no shell=True, timeout=20s)
+- 6 new GET-only endpoints (no POST/execute/repair)
+- No new file writes, registry modifications, or system changes
+
+---
+
 ## [v0.10.0-alpha] - 2026-09-19
 
 ### Phase 9B — Safe Temp Cleanup (`disk.cleanup_temp`)

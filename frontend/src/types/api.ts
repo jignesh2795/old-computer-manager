@@ -130,6 +130,7 @@ export interface ReportResponse {
   scheduled_tasks: Record<string, unknown>
   file_analysis: FileAnalysisResponse
   remediation: RemediationActionsResponse
+  diagnostics: DiagnosticsSummaryResponse
   errors: Array<Record<string, unknown>>
 }
 
@@ -258,4 +259,29 @@ export interface HistorySummaryResponse {
   recurring_findings: RecurringFindingResponse[]
   anomalies: AnomalyResponse[]
   data_quality: DataQualityResponse[]
+}
+
+// Diagnostic types
+
+export interface DiagnosticResultResponse {
+  diagnostic_id: string
+  category: string
+  status: string
+  title: string
+  summary: string
+  evidence: Record<string, unknown>
+  source: string
+  collected_at: string
+  limitations: string[]
+  errors: string[]
+}
+
+export interface DiagnosticsSummaryResponse {
+  available: boolean
+  run_id: number | null
+  status: string | null
+  result_count: number
+  categories: string[]
+  status_counts: Record<string, number>
+  results: DiagnosticResultResponse[]
 }

@@ -4,20 +4,24 @@ This document tracks completed milestones and potential future directions for Ol
 
 ## Completed Milestones
 
-### v0.10.0-alpha — Safe Temp Cleanup + API Field Exposure Fix ✓
+### v0.11.0-alpha — Read-Only Advanced Diagnostics ✓
 
-**Status**: 2026-09-19 (unreleased)
+**Status**: 2026-09-19 (release freeze)
 
 **Capabilities**:
-- `disk.cleanup_temp` action: policy-driven safe temp file cleanup via quarantine
-- Age-based eligibility: files older than configurable threshold (7–365 days, default 30)
-- MAX_FILES_PER_EXECUTION=500 with excess skip and structured result
-- Move-only via shutil.move through quarantine (no delete, no rmtree)
-- Revalidation before each move, idempotent execution
-- Full safety chain: Registered → Preview → Confirmation → Validation → Executor → Audit
-- API response models expose all remediation action metadata fields
-- `app/remediation/cleanup_temp.py`: 66 new tests across 30+ categories
-- 665 total backend tests, 13 frontend tests
+- 5 read-only diagnostic modules: disk health, thermal, performance, devices, Windows health
+- Per-module failure isolation — failure in one never aborts others
+- DiagnosticStatus distinguishes unavailable from hardware problem
+- Memory diagnostic correctly handles `psutil.swap_memory()` failures (corporate Windows)
+- Disk I/O rate-based warnings (100 MB/s threshold); cumulative bytes are informational telemetry
+- Snapshot-vs-trend wording: observations are clearly snapshots, not long-term conditions
+- All thresholds centralized in constants.py
+- 6 new GET-only API endpoints for diagnostics
+- CLI `diagnostics [--json] [category]` command
+- Dashboard Diagnostics section
+- AI context includes diagnostics summary
+- History tracks diagnostic metrics
+- 741 total backend tests, 13 frontend tests
 
 ---
 
@@ -82,59 +86,6 @@ The following features are **not implemented** and represent potential developme
 ### Near-Term Candidates
 
 #### Additional Remediation Actions
-- Browser cache cleanup (user temp scope)
-- Download folder duplicate removal
-- Old log file quarantine
-- Windows Update cleanup
-
-**Rationale**: Extend the safe remediation framework with more user-temp-scoped actions that follow the same safety model.
-
-#### Historical Trend Analysis
-- Disk usage trends over time
-- Process resource patterns
-- Battery degradation tracking
-- Software installation history
-
-**Rationale**: The discovery history is already stored; visualization and trend analysis would add value.
-
-#### Cross-Machine Comparison
-- Compare hardware configurations
-- Software inventory differences
-- Performance baseline comparisons
-
-**Rationale**: Useful for users managing multiple older computers.
-
-### Medium-Term Candidates
-
-#### AI Advisory Layer
-- Intelligent recommendations based on collected data
-- Natural language explanations of findings
-- Priority-based remediation suggestions
-- Context-aware optimization advice
-
-**Rationale**: AI can provide personalized guidance after reliable evidence has been collected and structured.
-
-**Requirement**: Must maintain local-first principle. AI processing should be optional and clearly separated from core intelligence gathering.
-
-#### React Dashboard
-- Interactive web UI for data visualization
-- Historical trend charts
-- Remediation workflow interface
-- System health dashboard
-
-**Rationale**: Visual interface makes the intelligence more accessible and actionable.
-
-**Requirement**: Must work with existing API layer. No server-side rendering that requires network access.
-
-#### Monitoring Daemon
-- Background process for continuous observation
-- Resource spike detection
-- Boot time tracking
-- Network event monitoring
-
-**Rationale**: Real-time monitoring complements point-in-time discovery.
-
-**Requirement**: Must be opt-in with clear resource usage disclosure.
 
 ### Long-Term Candidates
 
@@ -183,6 +134,6 @@ The following features are **not implemented** and represent potential developme
 
 No arbitrary dates or version numbers are committed to in advance. Development proceeds through milestones based on user needs and technical readiness.
 
-Current version: **v0.10.0-alpha**
+Current version: **v0.11.0-alpha**
 
 Next version will be determined when sufficient new functionality warrants a release.

@@ -24,6 +24,7 @@ MAX_RECOMMENDATIONS: int = 5
 MAX_HISTORICAL_TRENDS: int = 10
 MAX_HISTORICAL_RECURRING: int = 5
 MAX_HISTORICAL_ANOMALIES: int = 5
+MAX_DIAGNOSTIC_RESULTS: int = 20
 
 # Sensitive fields to exclude
 SENSITIVE_FIELDS: set[str] = {
@@ -54,6 +55,7 @@ class AIContext:
     process_summary: dict[str, Any] = field(default_factory=dict)
     remediation_metadata: list[dict[str, Any]] = field(default_factory=list)
     historical_summary: dict[str, Any] = field(default_factory=dict)
+    diagnostics_summary: dict[str, Any] = field(default_factory=dict)
     analysis_status: str | None = None
     errors: list[dict[str, Any]] = field(default_factory=list)
 
@@ -296,6 +298,42 @@ def _build_historical_summary(report: HealthReport) -> dict[str, Any]:
     return result
 
 
+def _build_diagnostics_summary(report: HealthReport) -> dict[str, Any]:
+    """Build bounded diagnostics summary from HealthReport.
+
+    Includes disk health, thermal, performance, device, and Windows health
+    observations. Excludes serial numbers. Distinguishes observation from diagnosis.
+    """
+    diag = report.diagnostics
+    if not diag.available or not diag.results:
+        return {"available": False}
+
+    result: dict[str, Any] = {
+        "available": True,
+        "status": diag.status,
+        "result_count": diag.result_count,
+        "categories": diag.categories,
+        "status_counts": diag.status_counts,
+    }
+
+    # Cap results and build bounded summaries per category
+    category_summaries: dict[str, list[dict[str, Any]]] = {}
+    for r in diag.results[:MAX_DIAGNOSTIC_RESULTS]:
+        cat = r.get("category", "unknown")
+        if cat not in category_summaries:
+            category_summaries[cat] = []
+        category_summaries[cat].append({
+            "diagnostic_id": _truncate_text(r.get("diagnostic_id", ""), 50),
+            "status": r.get("status", ""),
+            "title": _truncate_text(r.get("title", ""), 100),
+            "summary": _truncate_text(r.get("summary", ""), 300),
+            "source": _truncate_text(r.get("source", ""), 50),
+        })
+
+    result["categories_detail"] = category_summaries
+    return result
+
+
 def build_ai_context(report: HealthReport) -> AIContext:
     """Build bounded AI context from HealthReport.
 
@@ -321,6 +359,7 @@ def build_ai_context(report: HealthReport) -> AIContext:
         process_summary=_build_process_summary(report),
         remediation_metadata=_build_remediation_metadata(report),
         historical_summary=_build_historical_summary(report),
+        diagnostics_summary=_build_diagnostics_summary(report),
         analysis_status=report.analysis_status,
         errors=_build_errors(report),
     )

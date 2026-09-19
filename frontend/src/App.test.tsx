@@ -15,6 +15,12 @@ vi.mock('./api/client', () => ({
     system: vi.fn(),
     advisory: vi.fn(),
     history: vi.fn(),
+    diagnosticsSummary: vi.fn(),
+    diagnosticsDisk: vi.fn(),
+    diagnosticsThermal: vi.fn(),
+    diagnosticsPerformance: vi.fn(),
+    diagnosticsDevices: vi.fn(),
+    diagnosticsWindows: vi.fn(),
   },
 }))
 
@@ -131,6 +137,15 @@ const mockReport = {
     ],
     count: 1,
   },
+  diagnostics: {
+    available: false,
+    run_id: null,
+    status: null,
+    result_count: 0,
+    categories: [],
+    status_counts: {},
+    results: [],
+  },
   errors: [],
 }
 
@@ -199,6 +214,7 @@ function setupMocks() {
   vi.mocked(api.remediationActions).mockResolvedValue(mockReport.remediation as any)
   vi.mocked(api.system).mockResolvedValue(mockReport.system as any)
   vi.mocked(api.history).mockResolvedValue(null as any)
+  vi.mocked(api.diagnosticsSummary).mockResolvedValue(mockReport.diagnostics as any)
 }
 
 async function clickRefresh() {
@@ -270,6 +286,7 @@ describe('Dashboard', () => {
     vi.mocked(api.remediationActions).mockResolvedValue(mockReport.remediation as any)
     vi.mocked(api.system).mockResolvedValue(mockReport.system as any)
     vi.mocked(api.history).mockResolvedValue(null as any)
+    vi.mocked(api.diagnosticsSummary).mockResolvedValue(mockReport.diagnostics as any)
 
     render(<App />)
     await clickRefresh()
@@ -304,6 +321,7 @@ describe('Dashboard', () => {
     vi.mocked(api.remediationActions).mockResolvedValue(mockReport.remediation as any)
     vi.mocked(api.system).mockResolvedValue(mockReport.system as any)
     vi.mocked(api.history).mockResolvedValue(null as any)
+    vi.mocked(api.diagnosticsSummary).mockResolvedValue(mockReport.diagnostics as any)
 
     render(<App />)
     await clickRefresh()
@@ -376,6 +394,7 @@ describe('Dashboard', () => {
     vi.mocked(api.remediationActions).mockResolvedValue(null)
     vi.mocked(api.system).mockResolvedValue(null)
     vi.mocked(api.history).mockResolvedValue(null)
+    vi.mocked(api.diagnosticsSummary).mockResolvedValue(null)
 
     render(<App />)
     await clickRefresh()

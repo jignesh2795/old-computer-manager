@@ -41,6 +41,32 @@ CREATE TABLE IF NOT EXISTS findings (
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (run_id) REFERENCES discovery_runs(id)
 );
+
+CREATE TABLE IF NOT EXISTS diagnostic_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    discovery_run_id INTEGER,
+    started_at TEXT NOT NULL,
+    completed_at TEXT,
+    status TEXT NOT NULL DEFAULT 'running',
+    errors_json TEXT,
+    FOREIGN KEY (discovery_run_id) REFERENCES discovery_runs(id)
+);
+
+CREATE TABLE IF NOT EXISTS diagnostic_results (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id INTEGER NOT NULL,
+    diagnostic_id TEXT NOT NULL,
+    category TEXT NOT NULL,
+    status TEXT NOT NULL,
+    title TEXT NOT NULL,
+    summary TEXT NOT NULL,
+    evidence_json TEXT,
+    source TEXT,
+    collected_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    limitations_json TEXT,
+    errors_json TEXT,
+    FOREIGN KEY (run_id) REFERENCES diagnostic_runs(id)
+);
 """
 
 INDEXES = """
@@ -52,6 +78,12 @@ CREATE INDEX IF NOT EXISTS idx_findings_run_id
 ON findings(run_id);
 CREATE INDEX IF NOT EXISTS idx_findings_severity
 ON findings(severity);
+CREATE INDEX IF NOT EXISTS idx_diagnostic_results_run_id
+ON diagnostic_results(run_id);
+CREATE INDEX IF NOT EXISTS idx_diagnostic_results_category
+ON diagnostic_results(category);
+CREATE INDEX IF NOT EXISTS idx_diagnostic_runs_discovery_run_id
+ON diagnostic_runs(discovery_run_id);
 """
 
 
@@ -671,3 +703,141 @@ class SnapshotStore:
                 run_ids,
             )
             return {row[0]: row[1] for row in cursor.fetchall()}
+
+    # -- Diagnostic methods -------------------------------------------------
+
+    def save_diagnostic_run(
+        self,
+        discovery_run_id: int | None = None,
+        started_at: str = "",
+        completed_at: str = "",
+        status: str = "running",
+        results: list[dict[str, Any]] | None = None,
+        errors: list[dict[str, Any]] | None = None,
+    ) -> int:
+        """Persist a diagnostic run with all its results. Returns the run_id."""
+        with self._connect() as connection:
+            cursor = connection.execute(
+                "INSERT INTO diagnostic_runs"
+                "(discovery_run_id, started_at, completed_at, status, errors_json) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (
+                    discovery_run_id,
+                    started_at,
+                    completed_at,
+                    status,
+                    json.dumps(errors or [], default=str),
+                ),
+            )
+            run_id = int(cursor.lastrowid)
+            for result in (results or []):
+                connection.execute(
+                    "INSERT INTO diagnostic_results"
+                    "(run_id, diagnostic_id, category, status, title, summary, "
+                    "evidence_json, source, collected_at, limitations_json, errors_json) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        run_id,
+                        result["diagnostic_id"],
+                        result["category"],
+                        result["status"],
+                        result["title"],
+                        result["summary"],
+                        json.dumps(result.get("evidence", {}), default=str),
+                        result.get("source", ""),
+                        result.get("collected_at", ""),
+                        json.dumps(result.get("limitations", [])),
+                        json.dumps(result.get("errors", [])),
+                    ),
+                )
+            return run_id
+
+    def get_latest_diagnostic_run(self) -> dict[str, Any] | None:
+        """Return the most recent diagnostic run, or None."""
+        with self._connect() as connection:
+            cursor = connection.execute(
+                "SELECT id, discovery_run_id, started_at, completed_at, "
+                "status, errors_json "
+                "FROM diagnostic_runs ORDER BY id DESC LIMIT 1"
+            )
+            row = cursor.fetchone()
+            if row is None:
+                return None
+            return {
+                "id": row[0],
+                "discovery_run_id": row[1],
+                "started_at": row[2],
+                "completed_at": row[3],
+                "status": row[4],
+                "errors": json.loads(row[5]) if row[5] else [],
+            }
+
+    def load_diagnostic_results(self, run_id: int) -> list[dict[str, Any]]:
+        """Load all diagnostic results for a run."""
+        with self._connect() as connection:
+            cursor = connection.execute(
+                "SELECT diagnostic_id, category, status, title, summary, "
+                "evidence_json, source, collected_at, limitations_json, errors_json "
+                "FROM diagnostic_results WHERE run_id = ? ORDER BY id",
+                (run_id,),
+            )
+            return [
+                {
+                    "diagnostic_id": row[0],
+                    "category": row[1],
+                    "status": row[2],
+                    "title": row[3],
+                    "summary": row[4],
+                    "evidence": json.loads(row[5]) if row[5] else {},
+                    "source": row[6],
+                    "collected_at": row[7],
+                    "limitations": json.loads(row[8]) if row[8] else [],
+                    "errors": json.loads(row[9]) if row[9] else [],
+                }
+                for row in cursor.fetchall()
+            ]
+
+    def get_diagnostic_results_by_category(
+        self, run_id: int, category: str
+    ) -> list[dict[str, Any]]:
+        """Load diagnostic results filtered by category."""
+        with self._connect() as connection:
+            cursor = connection.execute(
+                "SELECT diagnostic_id, category, status, title, summary, "
+                "evidence_json, source, collected_at, limitations_json, errors_json "
+                "FROM diagnostic_results "
+                "WHERE run_id = ? AND category = ? ORDER BY id",
+                (run_id, category),
+            )
+            return [
+                {
+                    "diagnostic_id": row[0],
+                    "category": row[1],
+                    "status": row[2],
+                    "title": row[3],
+                    "summary": row[4],
+                    "evidence": json.loads(row[5]) if row[5] else {},
+                    "source": row[6],
+                    "collected_at": row[7],
+                    "limitations": json.loads(row[8]) if row[8] else [],
+                    "errors": json.loads(row[9]) if row[9] else [],
+                }
+                for row in cursor.fetchall()
+            ]
+
+    def get_diagnostic_summary(self, run_id: int) -> dict[str, Any]:
+        """Get a summary of diagnostic results for a run."""
+        with self._connect() as connection:
+            cursor = connection.execute(
+                "SELECT category, status, COUNT(*) "
+                "FROM diagnostic_results WHERE run_id = ? "
+                "GROUP BY category, status",
+                (run_id,),
+            )
+            summary: dict[str, dict[str, int]] = {}
+            for row in cursor.fetchall():
+                cat, stat, count = row
+                if cat not in summary:
+                    summary[cat] = {}
+                summary[cat][stat] = count
+            return summary

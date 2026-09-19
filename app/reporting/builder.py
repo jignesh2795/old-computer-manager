@@ -9,6 +9,7 @@ from app.analyzers.constants import STORAGE_CRITICAL_THRESHOLD, STORAGE_WARNING_
 from app.database.sqlite import SnapshotStore
 from app.reporting.models import (
     BatterySummary,
+    DiagnosticsSummary,
     FindingSummary,
     FindingsGrouped,
     FileAnalysisSummary,
@@ -183,6 +184,41 @@ def _build_file_analysis_summary(store: SnapshotStore) -> FileAnalysisSummary:
     )
 
 
+def _build_diagnostics_summary(store: SnapshotStore | None = None) -> DiagnosticsSummary:
+    """Build diagnostics summary from the latest diagnostic run."""
+    if store is None:
+        return DiagnosticsSummary()
+
+    try:
+        diag_run = store.get_latest_diagnostic_run()
+    except Exception:
+        return DiagnosticsSummary()
+
+    if diag_run is None:
+        return DiagnosticsSummary()
+
+    try:
+        results = store.load_diagnostic_results(diag_run["id"])
+    except Exception:
+        return DiagnosticsSummary(available=True, run_id=diag_run["id"], status=diag_run.get("status"))
+
+    categories = sorted(set(r.get("category", "") for r in results if r.get("category")))
+    status_counts: dict[str, int] = {}
+    for r in results:
+        s = r.get("status", "unknown")
+        status_counts[s] = status_counts.get(s, 0) + 1
+
+    return DiagnosticsSummary(
+        available=True,
+        run_id=diag_run["id"],
+        status=diag_run.get("status"),
+        result_count=len(results),
+        categories=categories,
+        status_counts=status_counts,
+        results=results,
+    )
+
+
 def _build_remediation_summary() -> RemediationSummary:
     from app.remediation.registry import create_default_registry
 
@@ -277,6 +313,7 @@ def build_health_report(store: SnapshotStore | None = None) -> HealthReport:
 
     file_analysis = _build_file_analysis_summary(store)
     remediation = _build_remediation_summary()
+    diagnostics = _build_diagnostics_summary(store)
 
     return HealthReport(
         schema_version=SCHEMA_VERSION,
@@ -297,5 +334,6 @@ def build_health_report(store: SnapshotStore | None = None) -> HealthReport:
         scheduled_tasks=ScheduledTaskSummary(count=task_count),
         file_analysis=file_analysis,
         remediation=remediation,
+        diagnostics=diagnostics,
         errors=errors,
     )

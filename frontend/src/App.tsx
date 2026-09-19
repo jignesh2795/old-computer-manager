@@ -11,6 +11,7 @@ import type {
   RemediationActionsResponse,
   SystemResponse,
   HistorySummaryResponse,
+  DiagnosticsSummaryResponse,
 } from './types/api'
 import { Overview } from './components/Overview'
 import { Findings } from './components/Findings'
@@ -21,6 +22,7 @@ import { AiAdvisory } from './components/AiAdvisory'
 import { Remediation } from './components/Remediation'
 import { System } from './components/System'
 import { Historical } from './components/Historical'
+import { Diagnostics } from './components/Diagnostics'
 
 interface DashboardData {
   report: ReportResponse | null
@@ -32,6 +34,7 @@ interface DashboardData {
   remediation: RemediationActionsResponse | null
   system: SystemResponse | null
   history: HistorySummaryResponse | null
+  diagnostics: DiagnosticsSummaryResponse | null
 }
 
 function App() {
@@ -45,6 +48,7 @@ function App() {
     remediation: null,
     system: null,
     history: null,
+    diagnostics: null,
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -65,6 +69,7 @@ function App() {
         remediation,
         system,
         history,
+        diagnostics,
       ] = await Promise.all([
         api.report().catch(() => null),
         api.advisory().catch(() => null),
@@ -75,6 +80,7 @@ function App() {
         api.remediationActions().catch(() => null),
         api.system().catch(() => null),
         api.history().catch(() => null),
+        api.diagnosticsSummary().catch(() => null),
       ])
 
       setData({
@@ -87,6 +93,7 @@ function App() {
         remediation,
         system,
         history,
+        diagnostics,
       })
       setLastFetch(new Date().toLocaleTimeString())
     } catch (err) {
@@ -136,6 +143,7 @@ function App() {
           <Remediation remediation={data.remediation} />
           <FileAnalysis fileAnalysis={data.fileAnalysis} />
           <Historical history={data.history} />
+          <Diagnostics diagnostics={data.diagnostics} />
         </div>
       )}
     </div>

@@ -4,7 +4,7 @@ A local-first, read-only computer intelligence system for understanding, diagnos
 
 ## Version
 
-**v0.10.0-alpha** — Safe Temp Cleanup + API Field Exposure Fix
+**v0.11.0-alpha** — Read-Only Advanced Diagnostics
 
 ## Purpose
 
@@ -36,7 +36,8 @@ Collectors -> SQLite Knowledge Base -> Analyzers -> Reports/API -> (Future: AI/U
 |-------|-------------|
 | **Collectors** | 11 read-only data collectors (hardware, OS, storage, software, startup, services, tasks, processes, battery, Windows-specific) |
 | **Analyzers** | 6 analysis engines (storage, startup, process, service, task, battery) that evaluate collected data against thresholds |
-| **SQLite Database** | Persistent knowledge base storing discovery snapshots, analysis findings, file scans, quarantine records, and audit trail |
+| **Diagnostics** | 5 read-only diagnostic modules (disk health, thermal, performance, devices, Windows health) with per-module isolation |
+| **SQLite Database** | Persistent knowledge base storing discovery snapshots, analysis findings, diagnostic runs, file scans, quarantine records, and audit trail |
 | **File Analysis** | Directory scanner with large file detection, file type grouping, and duplicate detection |
 | **Reporting** | Unified health report builder with human-readable and deterministic JSON export |
 | **API** | Local read-only FastAPI server for programmatic access |
@@ -135,6 +136,20 @@ old-computer-manager actions rollback <record_id>
 - **execute**: Execute an action with validation and confirmation
 - **rollback**: Restore a quarantined file to its original location
 
+### Advanced Diagnostics
+
+```bash
+old-computer-manager diagnostics
+old-computer-manager diagnostics --json
+old-computer-manager diagnostics disk
+old-computer-manager diagnostics thermal
+old-computer-manager diagnostics performance
+old-computer-manager diagnostics devices
+old-computer-manager diagnostics windows
+```
+
+Read-only diagnostic modules that inspect disk health, thermal sensors, CPU/memory/disk I/O/network performance, device/driver problems, and Windows system health (uptime, reboot status, reliability events). Each module runs independently — a failure in one never aborts others.
+
 ### Web Dashboard
 
 ```bash
@@ -180,6 +195,12 @@ All endpoints are GET-only and read-only. The server binds to localhost only.
 | `GET /api/v1/history/trends` | Trend analysis for all metrics |
 | `GET /api/v1/history/baseline` | Baseline comparison for all metrics |
 | `GET /api/v1/history/anomalies` | Detected anomalies in historical data |
+| `GET /api/v1/diagnostics/summary` | Diagnostic run summary (all categories) |
+| `GET /api/v1/diagnostics/disk` | Disk health diagnostics |
+| `GET /api/v1/diagnostics/thermal` | Thermal diagnostics |
+| `GET /api/v1/diagnostics/performance` | Performance diagnostics |
+| `GET /api/v1/diagnostics/devices` | Device/driver diagnostics |
+| `GET /api/v1/diagnostics/windows` | Windows health diagnostics |
 
 ### Interactive Documentation
 
@@ -406,7 +427,7 @@ npm test
 ```
 
 Current baseline:
-- **Backend**: 542 passed, 3 skipped, 0 failures
+- **Backend**: 741 passed, 8 skipped, 0 failures
 - **Frontend**: 13 passed, 0 failures
 
 ### Project Structure
@@ -418,6 +439,7 @@ app/
   discovery.py              # Discovery runner
   collectors/               # 11 data collectors
   analyzers/                # 6 analysis engines
+  diagnostics/              # 5 read-only diagnostic modules (disk, thermal, performance, devices, windows)
   database/                 # SQLite knowledge base
   file_analysis/            # Directory scanner and analyzers
   remediation/              # Safety framework and quarantine
