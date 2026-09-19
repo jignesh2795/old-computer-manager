@@ -187,11 +187,13 @@ def _build_remediation_summary() -> RemediationSummary:
     from app.remediation.registry import create_default_registry
 
     registry = create_default_registry()
+    _REAL_ACTIONS = {"user_temp_quarantine", "disk.cleanup_temp"}
     actions = []
     for action in registry.list_actions():
-        preview_available = hasattr(action, "preview") or action.action_id == "user_temp_quarantine"
-        rollback_available = action.action_id == "user_temp_quarantine"
-        real_execution_exists = action.action_id == "user_temp_quarantine"
+        is_real = action.action_id in _REAL_ACTIONS
+        preview_available = hasattr(action, "preview") or is_real
+        rollback_available = is_real
+        real_execution_exists = is_real
         actions.append(
             RemediationActionMeta(
                 action_id=action.action_id,

@@ -4,6 +4,58 @@ All notable changes to Old Computer Manager will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [v0.10.0-alpha] - 2026-09-19
+
+### Phase 9B — Safe Temp Cleanup (`disk.cleanup_temp`)
+
+This release implements the `disk.cleanup_temp` remediation action — a policy-driven cleanup of the current user's approved TEMP directory. Files are moved to quarantine (NEVER permanently deleted) with full rollback capability. Also fixes API response models to expose all remediation action metadata fields.
+
+### Added
+
+#### Safe Temp Cleanup (Phase 9B)
+- `app/remediation/cleanup_temp.py`: Policy layer with `preview_cleanup()`, `execute_cleanup()`, `validate_age_days()`
+- `disk.cleanup_temp` moved from PROPOSED → IMPLEMENTED in the action catalog
+- Registered with `ParameterSchema(age_days)` — only parameter, values 7–365, reject zero/negative/non-integer
+- Age policy: default 30 days, min 7, max 365
+- `MAX_FILES_PER_EXECUTION = 500`; excess candidates skipped with structured result
+- Move-only operation via `shutil.move` through quarantine (FORBIDDEN: os.remove, os.unlink, shutil.rmtree)
+- Revalidation immediately before moving each file
+- Full safety chain: Registered → Preview → Confirmation → Validation → Executor → Audit
+- Idempotent: running twice does not duplicate quarantine records
+- Only scans current user's approved TEMP directory (`TEMP`/`TMP` env vars)
+- Path containment: `is_under_directory()` validates source paths
+
+#### API Field Exposure Fix
+- `GET /api/v1/remediation/actions` now returns all action metadata fields (implementation_status, blast_radius, rollback_category, eligibility, category, action_version)
+- Both dedicated endpoint and `/api/v1/report` remediation section now expose complete metadata
+
+### Changed
+- `app/remediation/catalog.py`: `disk.cleanup_temp` moved from PROPOSED to IMPLEMENTED
+- `app/remediation/registry.py`: Registered `disk.cleanup_temp` with `ParameterSchema`
+- `app/remediation/preview.py`: Added `disk.cleanup_temp` preview handling with `CleanupPreview`
+- `app/remediation/executor.py`: Added `_execute_cleanup_temp()` on `QuarantineExecutor`
+- `app/remediation/__init__.py`: Added cleanup_temp exports
+- `app/reporting/builder.py`: `_build_remediation_summary()` recognizes `disk.cleanup_temp` in `_REAL_ACTIONS`
+- `app/cli.py`: Fixed CLI preview for `CleanupPreview` compatibility
+- `app/api/routes.py`: Fixed remediation response to include all metadata fields
+
+### Tests
+- Created `tests/test_cleanup_temp.py`: 66 tests across 30+ categories (A-AI)
+- Updated `tests/test_remediation_catalog.py`: Adjusted for new IMPLEMENTED counts
+- **Backend**: 665 passed, 6 skipped, 0 failures
+- **Frontend**: 13 passed, 0 failures
+
+### Safety
+- Only `shutil.move` used for file operations (no delete, no rmtree)
+- `is_under_directory()` path containment for all operations
+- Revalidation immediately before each file move
+- MAX_FILES_PER_EXECUTION enforced; excess skipped
+- Age parameter validated (7–365, integer only)
+- No new dangerous imports, shell/subprocess/registry access
+- No execution endpoints; existing GET-only API unchanged
+
+---
+
 ## [v0.9.1-alpha] - 2026-09-18
 
 ### Phase 9A — Remediation Action Framework Expansion

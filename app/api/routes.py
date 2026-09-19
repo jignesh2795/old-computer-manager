@@ -151,6 +151,12 @@ def _report_to_report_response(report: Any) -> ReportResponse:
                     preview_available=a.preview_available,
                     rollback_available=a.rollback_available,
                     real_execution_exists=a.real_execution_exists,
+                    implementation_status=a.implementation_status,
+                    blast_radius=a.blast_radius,
+                    rollback_category=a.rollback_category,
+                    eligibility=a.eligibility,
+                    category=a.category,
+                    action_version=a.action_version,
                 )
                 for a in report.remediation.actions
             ],
@@ -305,6 +311,12 @@ def get_remediation_actions_endpoint(report: HealthReport = Depends(get_report))
                 preview_available=a.preview_available,
                 rollback_available=a.rollback_available,
                 real_execution_exists=a.real_execution_exists,
+                implementation_status=a.implementation_status,
+                blast_radius=a.blast_radius,
+                rollback_category=a.rollback_category,
+                eligibility=a.eligibility,
+                category=a.category,
+                action_version=a.action_version,
             )
             for a in report.remediation.actions
         ],

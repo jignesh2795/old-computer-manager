@@ -177,20 +177,27 @@ def _build_catalog() -> dict[str, ActionCatalogEntry]:
             reversible=True,
             category="power",
         ),
-        # ── Proposed actions (designed but not implemented) ─────────
+        # ── Implemented production actions (continued) ───────────────
         ActionCatalogEntry(
             action_id="disk.cleanup_temp",
-            name="Cleanup old temp files (delete)",
-            description="Deletes temporary files older than age threshold.",
+            name="Safe temp cleanup (quarantine)",
+            description=(
+                "Quarantines temporary files older than age threshold.  "
+                "Files are moved to quarantine (NEVER permanently deleted).  "
+                "Rollback available."
+            ),
             risk_level=RiskLevel.MEDIUM,
-            implementation_status=ImplementationStatus.PROPOSED,
+            implementation_status=ImplementationStatus.IMPLEMENTED,
             blast_radius=BlastRadius.USER_DIRECTORY,
-            rollback_category=RollbackCategory.NOT_APPLICABLE,
-            eligibility=EligibilityStatus.REQUIRES_ROLLBACK_DESIGN,
+            rollback_category=RollbackCategory.SHUTIL_MOVE_RESTORE,
+            eligibility=EligibilityStatus.ELIGIBLE,
             requires_admin=False,
-            reversible=False,
+            reversible=True,
+            dependencies=(),
+            action_version="1",
             category="cleanup",
         ),
+        # ── Proposed actions (designed but not implemented) ─────────
         ActionCatalogEntry(
             action_id="disk.cleanup_logs",
             name="Cleanup old log files",

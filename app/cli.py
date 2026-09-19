@@ -18,7 +18,7 @@ def cmd_discover(args: argparse.Namespace) -> int:
     """Run a full discovery scan."""
     from app.discovery import run
 
-    print("Old Computer Manager v0.9.1-alpha")
+    print("Old Computer Manager v0.10.0-alpha")
     print("Read-only discovery mode")
     print(f"Platform: {platform.platform()}")
     print(f"Python: {sys.version.split()[0]}")
@@ -39,7 +39,7 @@ def cmd_analyze(args: argparse.Namespace) -> int:
     """Analyze the latest completed discovery run."""
     from app.analyzers.runner import analyze_latest_run
 
-    print("Old Computer Manager v0.9.1-alpha")
+    print("Old Computer Manager v0.10.0-alpha")
     print("Read-only analysis mode\n")
 
     store = SnapshotStore()
@@ -63,7 +63,7 @@ def cmd_actions(args: argparse.Namespace) -> int:
     """List registered remediation actions."""
     from app.remediation.registry import create_default_registry
 
-    print("Old Computer Manager v0.9.1-alpha")
+    print("Old Computer Manager v0.10.0-alpha")
     print("Remediation actions\n")
 
     registry = create_default_registry()
@@ -95,7 +95,7 @@ def cmd_actions_preview(args: argparse.Namespace) -> int:
     from app.remediation.preview import preview_action
     import json as json_mod
 
-    print("Old Computer Manager v0.9.1-alpha")
+    print("Old Computer Manager v0.10.0-alpha")
     print(f"Action preview: {args.action_id}\n")
 
     registry = create_default_registry()
@@ -142,7 +142,11 @@ def cmd_actions_preview(args: argparse.Namespace) -> int:
         print(f"Quarantine:    {plan.quarantine_dir}")
         print(f"Age threshold: {plan.age_threshold_days} days")
         print(f"Files examined: {plan.files_examined}")
-        print(f"Files eligible: {plan.files_eligible}")
+
+        # Handle both QuarantinePlan (files_eligible) and CleanupPreview (candidates)
+        eligible_count = getattr(plan, "files_eligible", None) or getattr(plan, "candidates", 0)
+        eligible_files = getattr(plan, "eligible_files", None) or getattr(plan, "candidate_files", [])
+        print(f"Files eligible: {eligible_count}")
         print(f"Total size:    {plan.total_size_bytes:,} bytes")
         print()
 
@@ -152,12 +156,12 @@ def cmd_actions_preview(args: argparse.Namespace) -> int:
                 print(f"  - {w}")
             print()
 
-        if plan.eligible_files:
-            print(f"Eligible files (showing {len(plan.eligible_files)}):")
-            for f in plan.eligible_files[:50]:
+        if eligible_files:
+            print(f"Eligible files (showing {len(eligible_files)}):")
+            for f in eligible_files[:50]:
                 print(f"  {f.path}  ({f.size:,} bytes, mtime: {f.mtime_iso})")
-            if len(plan.eligible_files) > 50:
-                print(f"  ... and {len(plan.eligible_files) - 50} more")
+            if len(eligible_files) > 50:
+                print(f"  ... and {len(eligible_files) - 50} more")
             print()
 
     print("Caveats:")
@@ -177,7 +181,7 @@ def cmd_actions_execute(args: argparse.Namespace) -> int:
     from app.remediation.audit import AuditStore
     import json as json_mod
 
-    print("Old Computer Manager v0.9.1-alpha")
+    print("Old Computer Manager v0.10.0-alpha")
     print(f"Execute action: {args.action_id}\n")
 
     registry = create_default_registry()
@@ -258,7 +262,7 @@ def cmd_actions_rollback(args: argparse.Namespace) -> int:
     from app.remediation.audit import AuditStore, AuditStatus
     from app.database.sqlite import SnapshotStore
 
-    print("Old Computer Manager v0.9.1-alpha")
+    print("Old Computer Manager v0.10.0-alpha")
     print(f"Rollback quarantine record: {args.record_id}\n")
 
     db_path = Path("data/computer.db")
@@ -306,7 +310,7 @@ def cmd_files_scan(args: argparse.Namespace) -> int:
     from app.file_analysis.runner import run_file_analysis
     from app.database.sqlite import SnapshotStore
 
-    print("Old Computer Manager v0.9.1-alpha")
+    print("Old Computer Manager v0.10.0-alpha")
     print(f"File scan: {args.path}\n")
 
     try:
@@ -414,7 +418,7 @@ def cmd_files_large(args: argparse.Namespace) -> int:
     from app.file_analysis.runner import run_file_analysis
     from app.database.sqlite import SnapshotStore
 
-    print("Old Computer Manager v0.9.1-alpha")
+    print("Old Computer Manager v0.10.0-alpha")
     print("Large file analysis\n")
 
     # Use provided path or latest scan
@@ -464,7 +468,7 @@ def cmd_files_types(args: argparse.Namespace) -> int:
     from app.file_analysis.runner import run_file_analysis
     from app.database.sqlite import SnapshotStore
 
-    print("Old Computer Manager v0.9.1-alpha")
+    print("Old Computer Manager v0.10.0-alpha")
     print("File type analysis\n")
 
     if args.path:
@@ -503,7 +507,7 @@ def cmd_files_duplicates(args: argparse.Namespace) -> int:
     from app.file_analysis.runner import run_file_analysis
     from app.database.sqlite import SnapshotStore
 
-    print("Old Computer Manager v0.9.1-alpha")
+    print("Old Computer Manager v0.10.0-alpha")
     print("Duplicate file analysis\n")
 
     if args.path:
@@ -568,7 +572,7 @@ def cmd_report(args: argparse.Namespace) -> int:
     from app.reporting.runner import generate_report, generate_json, generate_human
     from app.database.sqlite import SnapshotStore
 
-    print("Old Computer Manager v0.9.1-alpha")
+    print("Old Computer Manager v0.10.0-alpha")
     print("Generating health report...\n")
 
     store = SnapshotStore()
@@ -586,7 +590,7 @@ def cmd_serve(args: argparse.Namespace) -> int:
     """Start the local read-only API server."""
     import uvicorn
 
-    print("Old Computer Manager v0.9.1-alpha")
+    print("Old Computer Manager v0.10.0-alpha")
     print(f"Starting API server on {args.host}:{args.port}")
     print("This server is intended for localhost use only.")
     print("Press Ctrl+C to stop.\n")
@@ -604,7 +608,7 @@ def cmd_ai(args: argparse.Namespace) -> int:
     """Generate AI advisory from the latest completed report."""
     from app.ai.runner import run_advisory, run_advisory_json, AdvisoryRunnerError
 
-    print("Old Computer Manager v0.9.1-alpha")
+    print("Old Computer Manager v0.10.0-alpha")
     print("AI Advisory (local-first, read-only)\n")
 
     try:
@@ -694,7 +698,7 @@ def cmd_history(args: argparse.Namespace) -> int:
     """Display historical trend analysis."""
     from app.history.runner import run_history, run_history_json
 
-    print("Old Computer Manager v0.9.1-alpha")
+    print("Old Computer Manager v0.10.0-alpha")
     print("Historical Trend Analysis (read-only)\n")
 
     store = SnapshotStore()

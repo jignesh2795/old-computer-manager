@@ -188,6 +188,16 @@ class QuarantineExecutor(BaseExecutor):
         token: ConfirmationToken,
         audit_record_id: int,
     ) -> ExecutionResult:
+        if action.action_id == "disk.cleanup_temp":
+            return self._execute_cleanup_temp(action, token, audit_record_id)
+        return self._execute_quarantine(action, token, audit_record_id)
+
+    def _execute_quarantine(
+        self,
+        action: RemediationAction,
+        token: ConfirmationToken,
+        audit_record_id: int,
+    ) -> ExecutionResult:
         from app.remediation.quarantine import (
             execute_quarantine,
             get_user_temp_dir,
@@ -262,6 +272,75 @@ class QuarantineExecutor(BaseExecutor):
                 "failure_reasons": qresult.failure_reasons,
                 "quarantine_record_ids": record_ids,
                 "quarantine_dir": qresult.quarantine_dir,
+            },
+        )
+
+    def _execute_cleanup_temp(
+        self,
+        action: RemediationAction,
+        token: ConfirmationToken,
+        audit_record_id: int,
+    ) -> ExecutionResult:
+        from app.remediation.cleanup_temp import execute_cleanup
+
+        age_days = action.parameters.get("age_days", 30)
+
+        cresult = execute_cleanup(age_days=age_days)
+
+        # Create quarantine records for moved files
+        record_ids: list[int] = []
+        if cresult.files_moved > 0:
+            from app.remediation.quarantine import get_quarantine_dir
+            from app.remediation.quarantine_store import QuarantineRecord
+            from pathlib import Path
+            import time
+
+            quarantine_dir = Path(cresult.quarantine_dir)
+            if quarantine_dir.exists():
+                for entry in quarantine_dir.iterdir():
+                    if entry.is_file():
+                        # Check if this file was just moved (within last 5 seconds)
+                        try:
+                            stat = entry.stat()
+                            if time.time() - stat.st_mtime < 5:
+                                record = QuarantineRecord(
+                                    action_id=action.action_id,
+                                    audit_record_id=audit_record_id,
+                                    original_path="",
+                                    quarantine_path=str(entry),
+                                    original_size=stat.st_size,
+                                    original_mtime=str(stat.st_mtime),
+                                )
+                                rid = self._quarantine_store.create_record(record)
+                                record_ids.append(rid)
+                        except (OSError, PermissionError):
+                            pass
+
+        success = cresult.files_failed == 0 and cresult.files_moved > 0
+        message = (
+            f"Temp cleanup complete: {cresult.files_moved} files quarantined, "
+            f"{cresult.files_skipped} skipped, {cresult.files_failed} failed.  "
+            f"Total bytes moved: {cresult.bytes_moved}."
+        )
+
+        return ExecutionResult(
+            action_id=action.action_id,
+            success=success,
+            simulated=False,
+            rollback_available=True,
+            audit_record_id=audit_record_id,
+            message=message,
+            details={
+                "files_examined": cresult.files_examined,
+                "candidates": cresult.candidates,
+                "files_moved": cresult.files_moved,
+                "files_skipped": cresult.files_skipped,
+                "files_failed": cresult.files_failed,
+                "bytes_moved": cresult.bytes_moved,
+                "skip_reasons": cresult.skip_reasons,
+                "failure_reasons": cresult.failure_reasons,
+                "quarantine_record_ids": record_ids,
+                "quarantine_dir": cresult.quarantine_dir,
             },
         )
 

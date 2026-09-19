@@ -280,4 +280,38 @@ def create_default_registry() -> ActionRegistry:
         ),
     )
 
+    # --- disk.cleanup_temp: policy-driven safe temp cleanup ---
+    registry.register(
+        RemediationAction(
+            action_id="disk.cleanup_temp",
+            name="Safe temp cleanup (quarantine)",
+            description=(
+                "Quarantines temporary files older than age threshold.  "
+                "Files are moved to quarantine (NEVER permanently deleted).  "
+                "Rollback available.  Enforces MAX_FILES_PER_EXECUTION=500."
+            ),
+            risk_level=RiskLevel.MEDIUM,
+            target="User TEMP directory (per-user, not system temp)",
+            reason="Reclaim disk space by quarantining stale temporary files.",
+            requires_admin=False,
+            reversible=True,
+            preview=(
+                "Would scan the user TEMP directory and move files older than "
+                "the age threshold into quarantine.  Files are moved, not deleted."
+            ),
+            idempotent=True,
+            implementation_status=ImplementationStatus.IMPLEMENTED,
+            blast_radius=BlastRadius.USER_DIRECTORY,
+            rollback_category=RollbackCategory.SHUTIL_MOVE_RESTORE,
+            eligibility=EligibilityStatus.ELIGIBLE,
+            category="cleanup",
+        ),
+        parameter_schema=ParameterSchema(
+            required=set(),
+            optional={"age_days"},
+            types={"age_days": "int"},
+            values={"age_days": set(range(7, 366))},
+        ),
+    )
+
     return registry

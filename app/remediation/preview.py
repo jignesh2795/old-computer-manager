@@ -90,6 +90,41 @@ def preview_action(action: RemediationAction) -> PreviewResult:
             "Rollback restores files to their original location.",
         ]
 
+    elif action.action_id == "disk.cleanup_temp":
+        from app.remediation.cleanup_temp import preview_cleanup
+
+        age_days = action.parameters.get("age_days", 30)
+        preview = preview_cleanup(age_days=age_days)
+        quarantine_plan = preview
+
+        would_change = (
+            f"Would move {preview.candidates} files "
+            f"({preview.total_size_bytes:,} bytes) from {preview.source_dir} "
+            f"to {preview.quarantine_dir}.  Files are moved, not deleted.  "
+            f"Max files per execution: {preview.max_files_per_execution}."
+        )
+
+        if preview.candidates == 0:
+            would_change = (
+                f"Scan of {preview.source_dir} found {preview.files_examined} files "
+                f"but none are eligible for quarantine (age threshold: "
+                f"{preview.age_threshold_days} days)."
+            )
+        elif preview.limit_exceeded:
+            would_change += (
+                f"  WARNING: {preview.candidates} candidates exceeds "
+                f"limit; only {preview.max_files_per_execution} will be moved."
+            )
+
+        what_is_not_guaranteed = [
+            "Preview is based on current filesystem state and may change before execution.",
+            "Files created or modified between preview and execution may change eligibility.",
+            "Access-denied files will be skipped during execution.",
+            "Quarantine directory will be created if it does not exist.",
+            "Rollback restores files to their original location.",
+            "MAX_FILES_PER_EXECUTION=500 enforced; excess candidates are skipped.",
+        ]
+
     return PreviewResult(
         action_id=action.action_id,
         name=action.name,

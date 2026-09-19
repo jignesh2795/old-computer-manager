@@ -4,20 +4,20 @@ This document tracks completed milestones and potential future directions for Ol
 
 ## Completed Milestones
 
-### v0.9.1-alpha — Remediation Action Framework Expansion ✓
+### v0.10.0-alpha — Safe Temp Cleanup + API Field Exposure Fix ✓
 
-**Status**: 2026-09-18 (unreleased)
+**Status**: 2026-09-19 (unreleased)
 
 **Capabilities**:
-- Structured action catalog with risk model, eligibility, blast radius, rollback categories
-- Eligibility gate: single decision point for action execution eligibility
-- Action model extended with implementation_status, blast_radius, rollback_category, dependencies, eligibility, action_version, category
-- Registry validates against catalog (consistency check)
-- Audit trail persists action_version and implementation_status
-- AI prompt v1.2 with remediation action rules (distinguish implemented/proposed/blocked)
-- Frontend filters demo/test actions, shows implementation status
-- Only `user_temp_quarantine` is the production remediation action
-- 56 new tests, 598 total backend tests, 13 frontend tests
+- `disk.cleanup_temp` action: policy-driven safe temp file cleanup via quarantine
+- Age-based eligibility: files older than configurable threshold (7–365 days, default 30)
+- MAX_FILES_PER_EXECUTION=500 with excess skip and structured result
+- Move-only via shutil.move through quarantine (no delete, no rmtree)
+- Revalidation before each move, idempotent execution
+- Full safety chain: Registered → Preview → Confirmation → Validation → Executor → Audit
+- API response models expose all remediation action metadata fields
+- `app/remediation/cleanup_temp.py`: 66 new tests across 30+ categories
+- 665 total backend tests, 13 frontend tests
 
 ---
 
@@ -183,6 +183,6 @@ The following features are **not implemented** and represent potential developme
 
 No arbitrary dates or version numbers are committed to in advance. Development proceeds through milestones based on user needs and technical readiness.
 
-Current version: **v0.6.0-alpha**
+Current version: **v0.10.0-alpha**
 
 Next version will be determined when sufficient new functionality warrants a release.

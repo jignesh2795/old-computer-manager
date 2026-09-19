@@ -222,6 +222,7 @@ class TestGetCatalogEntriesByStatus:
         entries = get_catalog_entries_by_status(ImplementationStatus.IMPLEMENTED)
         ids = {e.action_id for e in entries}
         assert "user_temp_quarantine" in ids
+        assert "disk.cleanup_temp" in ids  # Phase 9B
         assert "demo.noop.print_message" in ids
         assert "demo.noop.report_status" in ids
 
@@ -238,10 +239,11 @@ class TestGetCatalogEntriesByStatus:
     def test_proposed_entries(self):
         entries = get_catalog_entries_by_status(ImplementationStatus.PROPOSED)
         ids = {e.action_id for e in entries}
-        assert "disk.cleanup_temp" in ids
         assert "disk.cleanup_logs" in ids
         assert "browser.cache_clear" in ids
         assert "update.check_only" in ids
+        # disk.cleanup_temp moved to IMPLEMENTED (Phase 9B)
+        assert "disk.cleanup_temp" not in ids
 
 
 # ── Test J: get_catalog_entries_by_eligibility ────────────────────
@@ -324,12 +326,19 @@ class TestCheckEligibilityBlocked:
 
 class TestCheckEligibilityProposed:
     def test_proposed_with_rollback_design(self):
-        result = check_eligibility("disk.cleanup_temp")
+        # disk.cleanup_temp moved to IMPLEMENTED (Phase 9B)
+        # Use disk.cleanup_logs instead
+        result = check_eligibility("disk.cleanup_logs")
         assert result.status == EligibilityStatus.REQUIRES_ROLLBACK_DESIGN
 
     def test_proposed_with_design_review(self):
         result = check_eligibility("browser.cache_clear")
         assert result.status == EligibilityStatus.REQUIRES_DESIGN_REVIEW
+
+    def test_disk_cleanup_temp_is_eligible(self):
+        # Phase 9B: disk.cleanup_temp is now IMPLEMENTED and ELIGIBLE
+        result = check_eligibility("disk.cleanup_temp")
+        assert result.status == EligibilityStatus.ELIGIBLE
 
 
 # ── Test P: check_eligibility for unknown action ──────────────────
@@ -346,12 +355,13 @@ class TestCheckEligibilityUnknown:
 class TestIsActionAllowed:
     def test_implemented_is_allowed(self):
         assert is_action_allowed("user_temp_quarantine") is True
+        assert is_action_allowed("disk.cleanup_temp") is True  # Phase 9B
 
     def test_blocked_is_not_allowed(self):
         assert is_action_allowed("startup.disable_entry") is False
 
     def test_proposed_is_not_allowed(self):
-        assert is_action_allowed("disk.cleanup_temp") is False
+        assert is_action_allowed("disk.cleanup_logs") is False
 
     def test_unknown_is_not_allowed(self):
         assert is_action_allowed("nonexistent.action") is False
@@ -382,7 +392,8 @@ class TestGetProposedActions:
 
     def test_count(self):
         actions = get_proposed_actions()
-        assert len(actions) == 4
+        # disk.cleanup_temp moved to IMPLEMENTED (Phase 9B)
+        assert len(actions) == 3
 
 
 # ── Test T: get_implemented_actions ───────────────────────────────
@@ -390,7 +401,9 @@ class TestGetProposedActions:
 class TestGetImplementedActions:
     def test_returns_implemented(self):
         actions = get_implemented_actions()
-        assert len(actions) == 3
+        # Phase 9B: disk.cleanup_temp added (4 total: user_temp_quarantine,
+        # disk.cleanup_temp, demo.noop.print_message, demo.noop.report_status)
+        assert len(actions) == 4
         for a in actions:
             assert a.implementation_status == ImplementationStatus.IMPLEMENTED
 
@@ -408,10 +421,13 @@ class TestGetImplementedProductionActions:
         for a in actions:
             assert a.category != "demo/test"
 
-    def test_only_user_temp_quarantine(self):
+    def test_production_actions(self):
         actions = get_implemented_production_actions()
-        assert len(actions) == 1
-        assert actions[0].action_id == "user_temp_quarantine"
+        # Phase 9B: disk.cleanup_temp added as implemented production action
+        assert len(actions) == 2
+        action_ids = {a.action_id for a in actions}
+        assert "user_temp_quarantine" in action_ids
+        assert "disk.cleanup_temp" in action_ids
 
 
 # ── Test V: Registry validates against catalog ────────────────────
@@ -529,8 +545,11 @@ class TestSecurityNoExecutionPaths:
 
     def test_only_production_implemented_action(self):
         actions = get_implemented_production_actions()
-        assert len(actions) == 1
-        assert actions[0].action_id == "user_temp_quarantine"
+        # Phase 9B: disk.cleanup_temp added
+        assert len(actions) == 2
+        action_ids = {a.action_id for a in actions}
+        assert "user_temp_quarantine" in action_ids
+        assert "disk.cleanup_temp" in action_ids
 
     def test_all_demo_actions_categorized(self):
         from app.remediation.catalog import CATALOG
