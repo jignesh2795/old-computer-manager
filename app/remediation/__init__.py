@@ -17,6 +17,21 @@ from app.remediation.confirmation import (
     consume_confirmation,
     require_confirmation,
 )
+from app.remediation.confirmation_service import (
+    ConfirmationService,
+    ConfirmationRecord,
+    ConfirmationStore,
+    ConfirmationError,
+    StalePreviewError,
+    InsufficientEvidenceError,
+    BlockedCandidateError,
+    ProposedCandidateError,
+    InvalidPreviewStatusError,
+    PreviewMismatchError,
+    ConfirmationAlreadyUsedError,
+    confirm_candidate,
+    get_confirmation_service,
+)
 from app.remediation.validation import validate_action, ValidationResult
 from app.remediation.audit import (
     AuditRecord,

@@ -526,6 +526,106 @@ def cmd_actions_preview_candidate(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_actions_confirm_candidate(args: argparse.Namespace) -> int:
+    """Confirm an action candidate with an existing preview (explicit human confirmation)."""
+    import json as json_mod
+    from app.reporting.builder import build_health_report
+    from app.remediation.preview import build_preview, PreviewStatus
+    from app.remediation.candidates import ActionCandidate, CandidateStatus, EvidenceSource, EvidenceSourceType
+    from app.remediation.confirmation_service import (
+        ConfirmationService,
+        ConfirmationError,
+    )
+
+    print("Old Computer Manager v0.14.0-alpha")
+    print(f"Confirm candidate: {args.candidate_id}\n")
+
+    report = build_health_report()
+
+    # Find candidate
+    candidate_data = None
+    for c in report.action_candidates.candidates:
+        if c.get("candidate_id") == args.candidate_id:
+            candidate_data = c
+            break
+
+    if candidate_data is None:
+        print(f"Error: Candidate '{args.candidate_id}' not found.")
+        print("Use 'actions candidates' to list available candidates.")
+        return 1
+
+    # Reconstruct ActionCandidate
+    evidence_list = []
+    for ev_dict in candidate_data.get("evidence", []):
+        source_type_str = ev_dict.get("source_type", "discovery")
+        try:
+            source_type = EvidenceSourceType(source_type_str)
+        except ValueError:
+            source_type = EvidenceSourceType.DISCOVERY
+        evidence_list.append(EvidenceSource(
+            source_type=source_type,
+            source_id=ev_dict.get("source_id", ""),
+            observation=ev_dict.get("observation", ""),
+        ))
+
+    try:
+        status_enum = CandidateStatus(candidate_data.get("status", "unavailable"))
+    except ValueError:
+        status_enum = CandidateStatus.AVAILABLE
+
+    candidate = ActionCandidate(
+        candidate_id=candidate_data.get("candidate_id", ""),
+        action_id=candidate_data.get("action_id", ""),
+        status=status_enum,
+        title=candidate_data.get("title", ""),
+        reason=candidate_data.get("reason", ""),
+        risk_level=candidate_data.get("risk_level", ""),
+        reversible=candidate_data.get("reversible", False),
+        requires_admin=candidate_data.get("requires_admin", False),
+        limitations=candidate_data.get("limitations", []),
+        evidence=evidence_list,
+        discovery_run_id=candidate_data.get("discovery_run_id"),
+    )
+
+    preview = build_preview(candidate)
+
+    # Attempt confirmation
+    service = ConfirmationService()
+    try:
+        record = service.confirm(candidate, preview)
+    except ConfirmationError as e:
+        print(f"Confirmation failed: {e}")
+        return 1
+
+    if args.json_output:
+        output = {
+            "confirmation_id": record.confirmation_id,
+            "candidate_id": record.candidate_id,
+            "action_id": record.action_id,
+            "preview_id": record.preview_id,
+            "preview_fingerprint": record.preview_fingerprint,
+            "confirmed_at": record.confirmed_at,
+            "consumed": record.consumed,
+        }
+        print(json_mod.dumps(output, indent=2, default=str))
+        return 0
+
+    # Human-readable output
+    print(f"  Confirmation ID:   {record.confirmation_id}")
+    print(f"  Candidate:         {record.candidate_id}")
+    print(f"  Action:            {record.action_id}")
+    print(f"  Preview ID:        {record.preview_id}")
+    print(f"  Preview fingerprint: {record.preview_fingerprint[:16]}...")
+    print(f"  Confirmed at:      {record.confirmed_at}")
+    print(f"  Consumed:          {'yes' if record.consumed else 'no'}")
+    print()
+    print("  Confirmation created. This token is single-use.")
+    print("  The action has NOT been executed. Use 'actions execute' to run it.")
+    print()
+
+    return 0
+
+
 def cmd_files_scan(args: argparse.Namespace) -> int:
     """Scan a directory and run file analysis."""
     from app.file_analysis.runner import run_file_analysis
@@ -1264,6 +1364,18 @@ def main() -> int:
         help="Output as JSON"
     )
 
+    # actions confirm-candidate
+    confirm_candidate_parser = actions_sub.add_parser(
+        "confirm-candidate", help="Confirm an action candidate (explicit human confirmation)"
+    )
+    confirm_candidate_parser.add_argument(
+        "candidate_id", help="Candidate ID to confirm"
+    )
+    confirm_candidate_parser.add_argument(
+        "--json", action="store_true", dest="json_output",
+        help="Output as JSON"
+    )
+
     # diagnostics subcommand
     diag_parser = sub.add_parser("diagnostics", help="Run read-only advanced diagnostics")
     diag_parser.add_argument(
@@ -1312,6 +1424,8 @@ def main() -> int:
             return cmd_actions_candidates(args)
         if args.actions_command == "preview-candidate":
             return cmd_actions_preview_candidate(args)
+        if args.actions_command == "confirm-candidate":
+            return cmd_actions_confirm_candidate(args)
         return cmd_actions(args)
     # Default: discover
     return cmd_discover(args)

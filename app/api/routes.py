@@ -488,6 +488,87 @@ def get_candidate_preview_endpoint(
     }
 
 
+@router.post("/remediation/candidates/{candidate_id}/confirm", tags=["remediation"])
+def confirm_candidate_endpoint(
+    candidate_id: str,
+    body: dict[str, Any] | None = None,
+    report: HealthReport = Depends(get_report),
+) -> dict[str, Any]:
+    """Confirm an action candidate with an existing preview.
+
+    This endpoint creates an explicit human confirmation token.
+    It requires a valid candidate and a READY preview.
+
+    The confirmation does NOT execute the action. It is a human
+    authorization gate that must be passed before execution.
+
+    Security constraints:
+    - Preview must be READY (not stale, not insufficient evidence)
+    - Candidate must be AVAILABLE (not proposed/blocked)
+    - Confirmation is single-use
+    - AI cannot create confirmation tokens
+    - No --yes/--force bypass
+    """
+    from app.remediation.candidates import ActionCandidate, CandidateStatus
+    from app.remediation.preview import build_preview, PreviewStatus
+    from app.remediation.confirmation_service import (
+        ConfirmationService,
+        ConfirmationError,
+    )
+
+    if body is None:
+        body = {}
+
+    preview_id = body.get("preview_id", "")
+
+    if not preview_id:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail="preview_id is required")
+
+    # Find the candidate
+    from app.remediation.policy import evaluate_candidates
+    policy_context = {}
+    candidates = evaluate_candidates(report, policy_context)
+
+    candidate = None
+    for c in candidates:
+        if c.candidate_id == candidate_id:
+            candidate = c
+            break
+
+    if candidate is None:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail=f"Candidate '{candidate_id}' not found")
+
+    # Build the preview to verify it matches
+    preview = build_preview(candidate)
+
+    if preview.preview_id != preview_id:
+        from fastapi import HTTPException
+        raise HTTPException(
+            status_code=400,
+            detail=f"Preview ID mismatch: expected '{preview.preview_id}', got '{preview_id}'"
+        )
+
+    # Attempt confirmation
+    service = ConfirmationService()
+    try:
+        record = service.confirm(candidate, preview)
+    except ConfirmationError as e:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail=str(e))
+
+    return {
+        "confirmation_id": record.confirmation_id,
+        "candidate_id": record.candidate_id,
+        "action_id": record.action_id,
+        "preview_id": record.preview_id,
+        "preview_fingerprint": record.preview_fingerprint,
+        "confirmed_at": record.confirmed_at,
+        "consumed": record.consumed,
+    }
+
+
 @router.get("/system", response_model=SystemResponse, tags=["system"])
 def get_system_endpoint(report: HealthReport = Depends(get_report)) -> SystemResponse:
     """Return the system section from the latest discovery."""

@@ -367,3 +367,24 @@ class HistorySummaryResponse(BaseModel):
     recurring_findings: list[RecurringFindingResponse] = []
     anomalies: list[AnomalyResponse] = []
     data_quality: list[DataQualityResponse] = []
+
+
+# Phase 11C: Confirmation
+class ConfirmationResponse(BaseModel):
+    confirmation_id: str
+    candidate_id: str
+    action_id: str
+    preview_id: str
+    preview_fingerprint: str
+    confirmed_at: str
+    consumed: bool = False
+
+
+class ConfirmationCreateRequest(BaseModel):
+    candidate_id: str
+    preview_id: str
+
+
+class ConfirmationErrorResponse(BaseModel):
+    error: str
+    detail: str = ""
