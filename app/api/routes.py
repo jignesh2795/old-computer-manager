@@ -652,6 +652,7 @@ def _get_diagnostic_results(
                 evidence=r.get("evidence", {}),
                 source=r.get("source", ""),
                 collected_at=r.get("collected_at", ""),
+                collection_time_ms=r.get("collection_time_ms", 0),
                 limitations=r.get("limitations", []),
                 errors=r.get("errors", []),
             )
@@ -706,3 +707,43 @@ def get_diagnostics_windows(
 ) -> DiagnosticsSummaryResponse:
     """Return Windows health diagnostic results."""
     return _get_diagnostic_results(store, category="windows")
+
+
+@router.get("/diagnostics/event-log", response_model=DiagnosticsSummaryResponse, tags=["diagnostics"])
+def get_diagnostics_event_log(
+    store: SnapshotStore = Depends(get_store),
+) -> DiagnosticsSummaryResponse:
+    """Return event log diagnostic results."""
+    return _get_diagnostic_results(store, category="event_log")
+
+
+@router.get("/diagnostics/reliability", response_model=DiagnosticsSummaryResponse, tags=["diagnostics"])
+def get_diagnostics_reliability(
+    store: SnapshotStore = Depends(get_store),
+) -> DiagnosticsSummaryResponse:
+    """Return reliability/crash-history diagnostic results."""
+    return _get_diagnostic_results(store, category="reliability")
+
+
+@router.get("/diagnostics/boot-timing", response_model=DiagnosticsSummaryResponse, tags=["diagnostics"])
+def get_diagnostics_boot_timing(
+    store: SnapshotStore = Depends(get_store),
+) -> DiagnosticsSummaryResponse:
+    """Return boot/startup timing diagnostic results."""
+    return _get_diagnostic_results(store, category="boot_timing")
+
+
+@router.get("/diagnostics/network-health", response_model=DiagnosticsSummaryResponse, tags=["diagnostics"])
+def get_diagnostics_network_health(
+    store: SnapshotStore = Depends(get_store),
+) -> DiagnosticsSummaryResponse:
+    """Return network health diagnostic results."""
+    return _get_diagnostic_results(store, category="network_health")
+
+
+@router.get("/diagnostics/driver-consistency", response_model=DiagnosticsSummaryResponse, tags=["diagnostics"])
+def get_diagnostics_driver_consistency(
+    store: SnapshotStore = Depends(get_store),
+) -> DiagnosticsSummaryResponse:
+    """Return driver consistency diagnostic results."""
+    return _get_diagnostic_results(store, category="driver_consistency")

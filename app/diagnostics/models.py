@@ -28,6 +28,11 @@ class DiagnosticCategory(str, Enum):
     PERFORMANCE = "performance"
     DEVICES = "devices"
     WINDOWS = "windows"
+    EVENT_LOG = "event_log"
+    RELIABILITY = "reliability"
+    BOOT_TIMING = "boot_timing"
+    NETWORK_HEALTH = "network_health"
+    DRIVER_CONSISTENCY = "driver_consistency"
 
 
 @dataclass(frozen=True)
@@ -36,6 +41,7 @@ class DiagnosticResult:
 
     This is the core typed result for all diagnostic modules.
     It captures what was observed, not what should be done about it.
+    collection_time_ms records how long collection took for regression detection.
     """
     diagnostic_id: str
     category: DiagnosticCategory
@@ -45,6 +51,7 @@ class DiagnosticResult:
     evidence: dict[str, Any] = field(default_factory=dict)
     source: str = ""
     collected_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    collection_time_ms: int = 0
     limitations: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
 
@@ -59,6 +66,7 @@ class DiagnosticRun:
     status: str = "running"
     results: list[DiagnosticResult] = field(default_factory=list)
     errors: list[dict[str, Any]] = field(default_factory=list)
+    total_time_ms: int = 0
 
     @property
     def disk_results(self) -> list[DiagnosticResult]:
@@ -79,6 +87,26 @@ class DiagnosticRun:
     @property
     def windows_results(self) -> list[DiagnosticResult]:
         return [r for r in self.results if r.category == DiagnosticCategory.WINDOWS]
+
+    @property
+    def event_log_results(self) -> list[DiagnosticResult]:
+        return [r for r in self.results if r.category == DiagnosticCategory.EVENT_LOG]
+
+    @property
+    def reliability_results(self) -> list[DiagnosticResult]:
+        return [r for r in self.results if r.category == DiagnosticCategory.RELIABILITY]
+
+    @property
+    def boot_timing_results(self) -> list[DiagnosticResult]:
+        return [r for r in self.results if r.category == DiagnosticCategory.BOOT_TIMING]
+
+    @property
+    def network_health_results(self) -> list[DiagnosticResult]:
+        return [r for r in self.results if r.category == DiagnosticCategory.NETWORK_HEALTH]
+
+    @property
+    def driver_consistency_results(self) -> list[DiagnosticResult]:
+        return [r for r in self.results if r.category == DiagnosticCategory.DRIVER_CONSISTENCY]
 
     @property
     def summary_counts(self) -> dict[str, int]:

@@ -132,6 +132,7 @@ class DiagnosticResultResponse(BaseModel):
     evidence: dict[str, Any] = {}
     source: str = ""
     collected_at: str = ""
+    collection_time_ms: int = 0
     limitations: list[str] = []
     errors: list[str] = []
 

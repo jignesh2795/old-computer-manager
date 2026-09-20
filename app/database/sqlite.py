@@ -63,6 +63,7 @@ CREATE TABLE IF NOT EXISTS diagnostic_results (
     evidence_json TEXT,
     source TEXT,
     collected_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    collection_time_ms INTEGER NOT NULL DEFAULT 0,
     limitations_json TEXT,
     errors_json TEXT,
     FOREIGN KEY (run_id) REFERENCES diagnostic_runs(id)
@@ -293,6 +294,20 @@ class SnapshotStore:
                 "    FOREIGN KEY (scan_run_id) REFERENCES file_scan_runs(id)"
                 ")"
             )
+
+        # Migrate diagnostic_results: add collection_time_ms column
+        cursor = connection.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' "
+            "AND name='diagnostic_results'"
+        )
+        if cursor.fetchone() is not None:
+            cursor = connection.execute("PRAGMA table_info(diagnostic_results)")
+            existing_cols = {row[1] for row in cursor.fetchall()}
+            if "collection_time_ms" not in existing_cols:
+                connection.execute(
+                    "ALTER TABLE diagnostic_results "
+                    "ADD COLUMN collection_time_ms INTEGER NOT NULL DEFAULT 0"
+                )
 
     def start_run(self) -> int:
         """Record the start of a discovery run. Returns the run id."""
@@ -734,8 +749,9 @@ class SnapshotStore:
                 connection.execute(
                     "INSERT INTO diagnostic_results"
                     "(run_id, diagnostic_id, category, status, title, summary, "
-                    "evidence_json, source, collected_at, limitations_json, errors_json) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "evidence_json, source, collected_at, collection_time_ms, "
+                    "limitations_json, errors_json) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         run_id,
                         result["diagnostic_id"],
@@ -746,6 +762,7 @@ class SnapshotStore:
                         json.dumps(result.get("evidence", {}), default=str),
                         result.get("source", ""),
                         result.get("collected_at", ""),
+                        result.get("collection_time_ms", 0),
                         json.dumps(result.get("limitations", [])),
                         json.dumps(result.get("errors", [])),
                     ),
@@ -777,7 +794,8 @@ class SnapshotStore:
         with self._connect() as connection:
             cursor = connection.execute(
                 "SELECT diagnostic_id, category, status, title, summary, "
-                "evidence_json, source, collected_at, limitations_json, errors_json "
+                "evidence_json, source, collected_at, collection_time_ms, "
+                "limitations_json, errors_json "
                 "FROM diagnostic_results WHERE run_id = ? ORDER BY id",
                 (run_id,),
             )
@@ -791,8 +809,9 @@ class SnapshotStore:
                     "evidence": json.loads(row[5]) if row[5] else {},
                     "source": row[6],
                     "collected_at": row[7],
-                    "limitations": json.loads(row[8]) if row[8] else [],
-                    "errors": json.loads(row[9]) if row[9] else [],
+                    "collection_time_ms": row[8],
+                    "limitations": json.loads(row[9]) if row[9] else [],
+                    "errors": json.loads(row[10]) if row[10] else [],
                 }
                 for row in cursor.fetchall()
             ]
@@ -804,7 +823,8 @@ class SnapshotStore:
         with self._connect() as connection:
             cursor = connection.execute(
                 "SELECT diagnostic_id, category, status, title, summary, "
-                "evidence_json, source, collected_at, limitations_json, errors_json "
+                "evidence_json, source, collected_at, collection_time_ms, "
+                "limitations_json, errors_json "
                 "FROM diagnostic_results "
                 "WHERE run_id = ? AND category = ? ORDER BY id",
                 (run_id, category),
@@ -819,8 +839,9 @@ class SnapshotStore:
                     "evidence": json.loads(row[5]) if row[5] else {},
                     "source": row[6],
                     "collected_at": row[7],
-                    "limitations": json.loads(row[8]) if row[8] else [],
-                    "errors": json.loads(row[9]) if row[9] else [],
+                    "collection_time_ms": row[8],
+                    "limitations": json.loads(row[9]) if row[9] else [],
+                    "errors": json.loads(row[10]) if row[10] else [],
                 }
                 for row in cursor.fetchall()
             ]

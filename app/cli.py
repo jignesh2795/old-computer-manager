@@ -803,7 +803,7 @@ def cmd_diagnostics(args: argparse.Namespace) -> int:
     print("Advanced Diagnostics (read-only)\n")
 
     category = getattr(args, "diagnostics_category", None)
-    valid_categories = {"disk", "thermal", "performance", "devices", "windows"}
+    valid_categories = {"disk", "thermal", "performance", "devices", "windows", "event_log", "reliability", "boot_timing", "network_health", "driver_consistency"}
     if category and category not in valid_categories:
         print(f"Unknown category: {category}")
         print(f"Valid categories: {', '.join(sorted(valid_categories))}")
@@ -1022,7 +1022,7 @@ def main() -> int:
     )
     diag_parser.add_argument(
         "diagnostics_category", nargs="?", default=None,
-        help="Specific category: disk, thermal, performance, devices, windows",
+        help="Specific category: disk, thermal, performance, devices, windows, event_log, reliability, boot_timing, network_health, driver_consistency",
     )
 
     args = parser.parse_args()

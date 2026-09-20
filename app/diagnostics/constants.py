@@ -18,6 +18,27 @@ CPU_TEMP_CRITICAL = 95
 DISK_TEMP_WARNING = 50
 DISK_TEMP_CRITICAL = 60
 
+# ── Event log limits ───────────────────────────────────────────────────
+EVENT_LOG_MAX_EVENTS = 200
+EVENT_LOG_LOOKBACK_DAYS = 30
+EVENT_LOG_ERROR_WARN_THRESHOLD = 10
+EVENT_LOG_RECURRING_THRESHOLD = 3
+
+# ── Reliability limits ─────────────────────────────────────────────────
+RELIABILITY_MAX_EVENTS = 50
+RELIABILITY_LOOKBACK_DAYS = 30
+RELIABILITY_CRASH_WARN_THRESHOLD = 3
+
+# ── Boot timing ────────────────────────────────────────────────────────
+BOOT_SLOW_SECONDS = 120
+
+# ── Network health ─────────────────────────────────────────────────────
+NETWORK_DNS_TEST_TIMEOUT = 5
+
+# ── Driver consistency ────────────────────────────────────────────────
+DRIVER_AGE_WARN_DAYS = 365
+DRIVER_MAX_RETURNED = 50
+
 # ── Limits ─────────────────────────────────────────────────────────────
 MAX_DEVICES_RETURNED = 200
 MAX_DIAGNOSTIC_RESULTS = 100
