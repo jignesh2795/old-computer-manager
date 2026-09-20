@@ -31,7 +31,7 @@ from app.remediation.quarantine import (
     scan_eligible_files,
 )
 from app.remediation.quarantine_store import QuarantineRecord, QuarantineStore
-from app.remediation.preview import preview_action
+from app.remediation.action_preview import preview_action
 from app.remediation.executor import QuarantineExecutor, SimulationExecutor, execute_action
 from app.remediation.audit import AuditRecord, AuditStatus, AuditStore
 from app.remediation.validation import validate_action, ValidationResult

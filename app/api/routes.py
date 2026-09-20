@@ -483,6 +483,8 @@ def get_candidate_preview_endpoint(
         "omitted_count": preview.omitted_count,
         "fingerprint": preview.fingerprint,
         "permanent_deletion": preview.permanent_deletion,
+        "implementation_status": preview.implementation_status,
+        "implementation_status_text": preview.implementation_status_text,
     }
 
 

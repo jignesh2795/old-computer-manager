@@ -16,7 +16,7 @@ from app.remediation.registry import (
     create_default_registry,
     validate_parameters,
 )
-from app.remediation.preview import PreviewResult, preview_action
+from app.remediation.action_preview import PreviewResult, preview_action
 from app.remediation.confirmation import (
     ConfirmationToken,
     ConfirmationRequiredError,

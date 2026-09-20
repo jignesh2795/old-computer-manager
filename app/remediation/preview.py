@@ -1,17 +1,15 @@
-"""Read-only preview models and builder for action candidates.
+"""Read-only candidate preview models and builder (Phase 11B).
 
-Phase 11B: Candidate Preview Intelligence.
-
-The preview layer generates a safe, deterministic, read-only description
-of what WOULD happen if a remediation action were executed. It has NO
-authority to execute, confirm, rollback, or modify the system.
+Generates safe, deterministic previews for ActionCandidates.
+Explains what WOULD happen if an action were executed, without
+performing any modification.
 
 Architecture:
-    Evidence -> ActionCandidate -> PreviewBuilder -> Preview
-                                                    -> Human-readable / JSON
-                                                    -> Explicit confirmation
-                                                    -> Existing validation/executor
-                                                    -> Audit
+    Evidence -> ActionCandidate -> CandidatePreviewBuilder -> Preview
+                                                            -> Human-readable / JSON
+                                                            -> Explicit confirmation
+                                                            -> Existing validation/executor
+                                                            -> Audit
 
 Security constraints:
     - NO executor import
@@ -21,12 +19,14 @@ Security constraints:
     - NO file writes or deletes
     - NO registry/service/task/startup modifications
     - Preview is informational only, never an authorization token
+
+Note: Legacy action preview (PreviewResult, preview_action) has been
+moved to action_preview.py for maintainability.
 """
 
 from __future__ import annotations
 
 import hashlib
-import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
@@ -90,6 +90,8 @@ class Preview:
     omitted_count: int = 0
     fingerprint: str = ""
     permanent_deletion: bool = False
+    implementation_status: str = ""
+    implementation_status_text: str = ""
 
 
 @dataclass(frozen=True)
@@ -118,12 +120,12 @@ MAX_PREVIEW_PATH_LENGTH = 500
 
 
 # ---------------------------------------------------------------------------
-# PreviewBuilder
+# CandidatePreviewBuilder
 # ---------------------------------------------------------------------------
 
 
-class PreviewBuilder:
-    """Deterministic, read-only preview builder.
+class CandidatePreviewBuilder:
+    """Deterministic, read-only preview builder for ActionCandidates.
 
     Uses ActionCandidate data, action catalog metadata, existing evidence,
     and stored analysis results to generate previews. Never uses an LLM.
@@ -172,21 +174,16 @@ class PreviewBuilder:
         file_analysis: dict[str, Any] | None,
     ) -> Preview:
         """Generate a complete preview for an available candidate."""
-        from app.remediation.catalog import get_catalog_entry
-
-        entry = get_catalog_entry(candidate.action_id)
-
         if candidate.action_id == "disk.cleanup_temp":
-            return self._preview_cleanup_temp(candidate, entry, file_analysis)
+            return self._preview_cleanup_temp(candidate, file_analysis)
         elif candidate.action_id == "user_temp_quarantine":
-            return self._preview_quarantine(candidate, entry, file_analysis)
+            return self._preview_quarantine(candidate)
         else:
-            return self._build_generic_available_preview(candidate, entry)
+            return self._build_generic_available_preview(candidate)
 
     def _preview_cleanup_temp(
         self,
         candidate: Any,
-        entry: Any | None,
         file_analysis: dict[str, Any] | None,
     ) -> Preview:
         """Preview for disk.cleanup_temp action."""
@@ -204,7 +201,6 @@ class PreviewBuilder:
             total_bytes += size
 
         omitted = max(0, len(eligible_files) - MAX_PREVIEW_ITEMS)
-
         affected_count = len(eligible_files)
 
         title = "Safe temp file cleanup (quarantine)"
@@ -252,14 +248,11 @@ class PreviewBuilder:
             omitted_count=omitted,
             fingerprint=fingerprint,
             permanent_deletion=False,
+            implementation_status="implemented",
+            implementation_status_text="Action is implemented and eligible for execution after confirmation.",
         )
 
-    def _preview_quarantine(
-        self,
-        candidate: Any,
-        entry: Any | None,
-        file_analysis: dict[str, Any] | None,
-    ) -> Preview:
+    def _preview_quarantine(self, candidate: Any) -> Preview:
         """Preview for user_temp_quarantine action."""
         return Preview(
             preview_id=f"preview:{candidate.candidate_id}",
@@ -283,7 +276,7 @@ class PreviewBuilder:
             freshness_status="within_window",
         )
 
-    def _build_generic_available_preview(self, candidate: Any, entry: Any | None) -> Preview:
+    def _build_generic_available_preview(self, candidate: Any) -> Preview:
         """Generic preview for other available candidates."""
         risk = candidate.risk_level if hasattr(candidate, "risk_level") else ""
         return Preview(
@@ -330,6 +323,8 @@ class PreviewBuilder:
             confirmation_required=False,
             limitations=["Action is proposed but not implemented", "No execution preview available"],
             warnings=["This action cannot be executed in the current version"],
+            implementation_status="proposed",
+            implementation_status_text="Action is designed but not yet implemented. No execution path exists.",
         )
 
     # ------------------------------------------------------------------
@@ -357,6 +352,8 @@ class PreviewBuilder:
             confirmation_required=False,
             limitations=["Action is explicitly blocked", "No execution preview available"],
             warnings=["This action is blocked due to high risk or system-wide blast radius"],
+            implementation_status="blocked",
+            implementation_status_text="Action is explicitly blocked. Risk or blast radius prevents execution.",
         )
 
     # ------------------------------------------------------------------
@@ -384,6 +381,8 @@ class PreviewBuilder:
             confirmation_required=False,
             limitations=candidate.limitations if hasattr(candidate, "limitations") else [],
             warnings=["Missing evidence prevents preview generation"],
+            implementation_status="insufficient_evidence",
+            implementation_status_text="Action may be eligible but evidence is insufficient to identify targets.",
         )
 
     # ------------------------------------------------------------------
@@ -415,6 +414,8 @@ class PreviewBuilder:
             confirmation_required=False,
             limitations=[stale_info, "Stale evidence cannot identify current targets"],
             warnings=["Evidence is expired. A fresh discovery is required before previewing."],
+            implementation_status="stale",
+            implementation_status_text="Evidence has expired. A fresh discovery is required.",
         )
 
     # ------------------------------------------------------------------
@@ -466,6 +467,13 @@ class PreviewBuilder:
         return hashlib.sha256(combined.encode()).hexdigest()[:16]
 
 
+# ---------------------------------------------------------------------------
+# Module-level convenience alias
+# ---------------------------------------------------------------------------
+
+PreviewBuilder = CandidatePreviewBuilder
+
+
 def build_preview(
     candidate: Any,
     policy_context: Any | None = None,
@@ -475,131 +483,5 @@ def build_preview(
 
     This is the main entry point for preview generation.
     """
-    builder = PreviewBuilder()
+    builder = CandidatePreviewBuilder()
     return builder.build_preview(candidate, policy_context, file_analysis)
-
-
-# ===========================================================================
-# Phase 10A: Legacy preview for remediation actions (PreviewResult)
-# ===========================================================================
-
-
-@dataclass(frozen=True)
-class PreviewResult:
-    """Structured preview of what an action would do.
-
-    The preview is a read-only description.  It must not cause any
-    side effects on the machine.
-    """
-
-    action_id: str
-    name: str
-    description: str
-    risk_level: str
-    target: str
-    reason: str
-    requires_admin: bool
-    reversible: bool
-    idempotent: bool
-    would_change: str
-    what_is_not_guaranteed: list[str] = field(default_factory=list)
-    parameters: dict[str, Any] = field(default_factory=dict)
-    quarantine_plan: Any = None
-
-
-def preview_action(action: Any) -> PreviewResult:
-    """Generate a preview for a proposed action.
-
-    For the quarantine action, this performs a real scan without
-    modifying anything.  For other actions, it returns a static preview.
-    """
-    from app.remediation.action import RemediationAction
-
-    what_is_not_guaranteed = [
-        "This preview is based on the state at the time of analysis and may be stale.",
-        "Actual execution may encounter errors not reflected in the preview.",
-        "Rollback availability depends on the action implementation.",
-        "No guarantee is made about side effects beyond the stated target.",
-    ]
-
-    quarantine_plan = None
-    would_change = action.preview
-
-    if action.action_id == "user_temp_quarantine":
-        from app.remediation.quarantine import preview_quarantine
-
-        age_days = action.parameters.get("age_days", 7)
-        plan = preview_quarantine(age_threshold_days=age_days)
-        quarantine_plan = plan
-
-        would_change = (
-            f"Would move {plan.files_eligible} files "
-            f"({plan.total_size_bytes:,} bytes) from {plan.source_dir} "
-            f"to {plan.quarantine_dir}.  Files are moved, not deleted."
-        )
-
-        if plan.files_eligible == 0:
-            would_change = (
-                f"Scan of {plan.source_dir} found {plan.files_examined} files "
-                f"but none are eligible for quarantine (age threshold: "
-                f"{plan.age_threshold_days} days)."
-            )
-
-        what_is_not_guaranteed = [
-            "Preview is based on current filesystem state and may change before execution.",
-            "Files created or modified between preview and execution may change eligibility.",
-            "Access-denied files will be skipped during execution.",
-            "Quarantine directory will be created if it does not exist.",
-            "Rollback restores files to their original location.",
-        ]
-
-    elif action.action_id == "disk.cleanup_temp":
-        from app.remediation.cleanup_temp import preview_cleanup
-
-        age_days = action.parameters.get("age_days", 30)
-        preview = preview_cleanup(age_days=age_days)
-        quarantine_plan = preview
-
-        would_change = (
-            f"Would move {preview.candidates} files "
-            f"({preview.total_size_bytes:,} bytes) from {preview.source_dir} "
-            f"to {preview.quarantine_dir}.  Files are moved, not deleted.  "
-            f"Max files per execution: {preview.max_files_per_execution}."
-        )
-
-        if preview.candidates == 0:
-            would_change = (
-                f"Scan of {preview.source_dir} found {preview.files_examined} files "
-                f"but none are eligible for quarantine (age threshold: "
-                f"{preview.age_threshold_days} days)."
-            )
-        elif preview.limit_exceeded:
-            would_change += (
-                f"  WARNING: {preview.candidates} candidates exceeds "
-                f"limit; only {preview.max_files_per_execution} will be moved."
-            )
-
-        what_is_not_guaranteed = [
-            "Preview is based on current filesystem state and may change before execution.",
-            "Files created or modified between preview and execution may change eligibility.",
-            "Access-denied files will be skipped during execution.",
-            "Quarantine directory will be created if it does not exist.",
-            "Rollback restores files to their original location.",
-            "MAX_FILES_PER_EXECUTION=500 enforced; excess candidates are skipped.",
-        ]
-
-    return PreviewResult(
-        action_id=action.action_id,
-        name=action.name,
-        description=action.description,
-        risk_level=action.risk_level.value,
-        target=action.target,
-        reason=action.reason,
-        requires_admin=action.requires_admin,
-        reversible=action.reversible,
-        idempotent=action.idempotent,
-        would_change=would_change,
-        what_is_not_guaranteed=what_is_not_guaranteed,
-        parameters=dict(action.parameters),
-        quarantine_plan=quarantine_plan,
-    )

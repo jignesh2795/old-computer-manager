@@ -82,9 +82,9 @@ This document tracks completed milestones and potential future directions for Ol
 
 ---
 
-### v0.14.0-alpha — Candidate Preview Intelligence (In Progress)
+### v0.14.0-alpha — Candidate Preview Intelligence ✓
 
-**Status**: 2026-09-20 (in progress)
+**Status**: 2026-09-20 (release freeze)
 
 **Capabilities**:
 - Preview model (PreviewStatus, Preview, PreviewItem, PreviewSummary)
