@@ -32,6 +32,23 @@ from app.remediation.confirmation_service import (
     confirm_candidate,
     get_confirmation_service,
 )
+from app.remediation.controlled_execution import (
+    ControlledExecutionService,
+    ControlledExecutionResult,
+    ExecutionStore,
+    ExecutionStatus,
+    ExecutionDeniedError,
+    NotProductionActionError,
+    ConfirmationRequiredError as ExecutionConfirmationRequiredError,
+    StalePreviewError as ExecutionStalePreviewError,
+    PreviewMismatchError as ExecutionPreviewMismatchError,
+    ActionVersionMismatchError,
+    ParameterMismatchError,
+    DoubleExecutionError,
+    RevalidationFailedError,
+    PRODUCTION_ACTIONS,
+    get_execution_service,
+)
 from app.remediation.validation import validate_action, ValidationResult
 from app.remediation.audit import (
     AuditRecord,

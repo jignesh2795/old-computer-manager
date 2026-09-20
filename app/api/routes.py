@@ -569,6 +569,92 @@ def confirm_candidate_endpoint(
     }
 
 
+@router.post("/remediation/candidates/{candidate_id}/execute", tags=["remediation"])
+def execute_candidate_endpoint(
+    candidate_id: str,
+    body: dict[str, Any] | None = None,
+    report: HealthReport = Depends(get_report),
+) -> dict[str, Any]:
+    """Execute a confirmed action candidate through the controlled pipeline.
+
+    This endpoint:
+    1. Validates all 14 authorization conditions
+    2. Consumes the confirmation token atomically
+    3. Revalidates targets (TOCTOU)
+    4. Executes through the controlled executor
+    5. Records audit transitions
+    6. Returns structured result
+
+    Security constraints:
+    - Only production actions may execute
+    - Confirmation token is consumed atomically
+    - Preview must be READY and fresh
+    - Action version must match across all components
+    - No arbitrary paths, commands, or executables
+    """
+    from app.remediation.candidates import ActionCandidate, CandidateStatus
+    from app.remediation.preview import build_preview, PreviewStatus
+    from app.remediation.controlled_execution import (
+        ControlledExecutionService,
+        ExecutionDeniedError,
+    )
+
+    if body is None:
+        body = {}
+
+    confirmation_id = body.get("confirmation_id", "")
+
+    if not confirmation_id:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail="confirmation_id is required")
+
+    # Find the candidate
+    from app.remediation.policy import evaluate_candidates
+    policy_context = {}
+    candidates = evaluate_candidates(report, policy_context)
+
+    candidate = None
+    for c in candidates:
+        if c.candidate_id == candidate_id:
+            candidate = c
+            break
+
+    if candidate is None:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail=f"Candidate '{candidate_id}' not found")
+
+    # Build the preview
+    preview = build_preview(candidate)
+
+    # Execute through controlled pipeline
+    service = ControlledExecutionService()
+    try:
+        result = service.execute(candidate, preview, confirmation_id)
+    except ExecutionDeniedError as e:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail=str(e))
+
+    return {
+        "execution_id": result.execution_id,
+        "action_id": result.action_id,
+        "action_version": result.action_version,
+        "candidate_id": candidate_id,
+        "confirmation_id": result.confirmation_id,
+        "started_at": result.started_at,
+        "completed_at": result.completed_at,
+        "status": result.status,
+        "files_examined": result.files_examined,
+        "files_moved": result.files_moved,
+        "files_skipped": result.files_skipped,
+        "files_failed": result.files_failed,
+        "bytes_moved": result.bytes_moved,
+        "quarantine_record_ids": result.quarantine_record_ids,
+        "result_summary": result.result_summary,
+        "errors": result.errors,
+        "rollback_available": result.rollback_available,
+    }
+
+
 @router.get("/system", response_model=SystemResponse, tags=["system"])
 def get_system_endpoint(report: HealthReport = Depends(get_report)) -> SystemResponse:
     """Return the system section from the latest discovery."""
