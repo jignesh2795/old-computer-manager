@@ -4,6 +4,45 @@ All notable changes to Old Computer Manager will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased] - Phase 11B — Candidate Preview Intelligence
+
+### Phase 11B — Candidate Preview Intelligence
+
+This phase adds safe, deterministic, read-only preview generation for action candidates. A preview explains exactly what WOULD happen if an action were executed, without performing any modification.
+
+#### New Module
+- `app/remediation/preview.py`: Preview, PreviewBuilder, PreviewItem, PreviewStatus, PreviewSummary models + build_preview() convenience function
+
+#### Preview Features
+- `PreviewStatus`: READY, STALE, INSUFFICIENT_EVIDENCE, BLOCKED, UNAVAILABLE, ERROR
+- `Preview` dataclass (frozen): 25+ fields including affected_items, expected_effect, rollback_description, fingerprint
+- `PreviewBuilder`: Deterministic builder, no LLM, no executor, no confirmation tokens
+- Available candidate preview: full target list with paths, sizes, counts, bytes
+- Proposed candidate preview: design-only, non-executable, clear limitations
+- Blocked candidate preview: explains why action cannot execute
+- Insufficient evidence preview: identifies missing evidence
+- Stale evidence preview: refuses to present expired targets
+- `MAX_PREVIEW_ITEMS = 20` for bounded output
+- `PreviewItem` fingerprint for change detection
+
+#### API
+- `GET /api/v1/remediation/candidates/{candidate_id}/preview`: Read-only preview for a candidate
+
+#### CLI
+- `ocm actions preview-candidate <candidate_id> [--json]`: Preview a candidate
+
+#### Security
+- Preview has NO executor import, NO confirmation token import, NO rollback execution
+- Preview does NOT create execution audit records
+- Preview is informational only, never an authorization token
+- Preview is frozen (immutable)
+- No subprocess/shell in preview module
+
+#### Tests
+- 45 new Phase 11B tests covering model, builder, API, CLI, security, determinism
+- 873 backend tests passing (828 existing + 45 new), 8 skipped
+- 13 frontend tests passing
+
 ## [v0.13.0-alpha] - 2026-09-20
 
 ### Phase 11A — Action Candidate System (Diagnostic-to-Action Intelligence)

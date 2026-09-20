@@ -76,3 +76,13 @@ from app.remediation.policy import (
     MAX_ACTION_CANDIDATES,
     MAX_EVIDENCE_ITEMS,
 )
+# Preview (read-only, no execution authority)
+from app.remediation.preview import (
+    Preview,
+    PreviewBuilder,
+    PreviewItem,
+    PreviewStatus,
+    PreviewSummary,
+    build_preview,
+    MAX_PREVIEW_ITEMS,
+)

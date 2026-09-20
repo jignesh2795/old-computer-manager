@@ -80,6 +80,55 @@ This document tracks completed milestones and potential future directions for Ol
 - 62 new tests, 828 total backend tests
 - Security audit: no executor/subprocess/shell in candidates.py or policy.py
 
+---
+
+### v0.14.0-alpha — Candidate Preview Intelligence (In Progress)
+
+**Status**: 2026-09-20 (in progress)
+
+**Capabilities**:
+- Preview model (PreviewStatus, Preview, PreviewItem, PreviewSummary)
+- PreviewBuilder: deterministic, read-only, no LLM
+- Available candidate preview: full target list with paths, sizes, counts, bytes
+- Proposed candidate preview: design-only, non-executable
+- Blocked candidate preview: explains why action is blocked
+- Insufficient evidence preview: identifies missing evidence
+- Stale evidence preview: refuses expired targets
+- MAX_PREVIEW_ITEMS = 20 for bounded output
+- Preview fingerprint for change detection
+- GET /api/v1/remediation/candidates/{candidate_id}/preview
+- CLI: `actions preview-candidate <candidate_id> [--json]`
+- 45 new tests, 873 total backend tests
+- Security audit: no executor/subprocess/confirmation in preview.py
+
+**Design decisions**:
+- Preview is informational only, never an authorization token
+- Preview does not create execution audit records
+- Preview is frozen (immutable)
+- AI cannot modify preview content
+- Preview does not automatically scan filesystems
+- Preview does not refresh stale evidence
+
+**Status**: 2026-09-20 (release freeze)
+
+**Capabilities**:
+- ActionCandidate model with deterministic status (available/proposed/blocked/insufficient_evidence/stale)
+- Evidence binding via EvidenceSource (source_type, source_id, observation, value)
+- PolicyEngine: evaluate_candidates() evaluates diagnostic data against action catalog
+- Rule A: disk.cleanup_temp — triggers on storage pressure (>80%) + eligible temp files
+- Rule B: user_temp_quarantine — triggers on eligible temp file evidence
+- Blocked actions: startup.disable_entry, service.stop_temporary, service.disable_unused, software.uninstall, network.proxy_configure, power.plan_optimize
+- Proposed actions: disk.cleanup_logs, browser.cache_clear, update.check_only
+- `executable` property always returns `False` — no execution authority
+- MAX_ACTION_CANDIDATES=20, MAX_EVIDENCE_ITEMS=10
+- GET /api/v1/remediation/candidates (with status/action_id filters)
+- GET /api/v1/remediation/candidates/{candidate_id}
+- CLI: `actions candidates [--json] [--status X] [--action X]`
+- AI prompt v1.3 with candidate rules (25-35)
+- ActionCandidateSummary in HealthReport
+- 62 new tests, 828 total backend tests
+- Security audit: no executor/subprocess/shell in candidates.py or policy.py
+
 **Design decisions**:
 - Candidate layer MUST NOT import executor module
 - Policy engine decides availability, not AI
@@ -199,6 +248,6 @@ The following features are **not implemented** and represent potential developme
 
 No arbitrary dates or version numbers are committed to in advance. Development proceeds through milestones based on user needs and technical readiness.
 
-Current version: **v0.13.0-alpha**
+Current version: **v0.14.0-alpha**
 
 Next version will be determined when sufficient new functionality warrants a release.

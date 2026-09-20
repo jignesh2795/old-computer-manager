@@ -372,6 +372,156 @@ def cmd_actions_candidates(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_actions_preview_candidate(args: argparse.Namespace) -> int:
+    """Preview an action candidate (read-only, no execution)."""
+    import json as json_mod
+    from app.reporting.builder import build_health_report
+    from app.remediation.preview import build_preview, PreviewStatus
+    from app.remediation.candidates import ActionCandidate, CandidateStatus, EvidenceSource, EvidenceSourceType
+
+    print("Old Computer Manager v0.13.0-alpha")
+    print(f"Candidate preview: {args.candidate_id}\n")
+
+    report = build_health_report()
+
+    # Find candidate
+    candidate_data = None
+    for c in report.action_candidates.candidates:
+        if c.get("candidate_id") == args.candidate_id:
+            candidate_data = c
+            break
+
+    if candidate_data is None:
+        print(f"Error: Candidate '{args.candidate_id}' not found.")
+        print("Use 'actions candidates' to list available candidates.")
+        return 1
+
+    # Reconstruct ActionCandidate
+    evidence_list = []
+    for ev_dict in candidate_data.get("evidence", []):
+        source_type_str = ev_dict.get("source_type", "discovery")
+        try:
+            source_type = EvidenceSourceType(source_type_str)
+        except ValueError:
+            source_type = EvidenceSourceType.DISCOVERY
+        evidence_list.append(EvidenceSource(
+            source_type=source_type,
+            source_id=ev_dict.get("source_id", ""),
+            observation=ev_dict.get("observation", ""),
+        ))
+
+    try:
+        status_enum = CandidateStatus(candidate_data.get("status", "unavailable"))
+    except ValueError:
+        status_enum = CandidateStatus.AVAILABLE
+
+    candidate = ActionCandidate(
+        candidate_id=candidate_data.get("candidate_id", ""),
+        action_id=candidate_data.get("action_id", ""),
+        status=status_enum,
+        title=candidate_data.get("title", ""),
+        reason=candidate_data.get("reason", ""),
+        risk_level=candidate_data.get("risk_level", ""),
+        reversible=candidate_data.get("reversible", False),
+        requires_admin=candidate_data.get("requires_admin", False),
+        limitations=candidate_data.get("limitations", []),
+        evidence=evidence_list,
+        discovery_run_id=candidate_data.get("discovery_run_id"),
+    )
+
+    preview = build_preview(candidate)
+
+    if args.json_output:
+        output = {
+            "preview_id": preview.preview_id,
+            "candidate_id": preview.candidate_id,
+            "action_id": preview.action_id,
+            "generated_at": preview.generated_at,
+            "status": preview.status.value,
+            "title": preview.title,
+            "summary": preview.summary,
+            "target": preview.target,
+            "affected_count": preview.affected_count,
+            "affected_bytes": preview.affected_bytes,
+            "affected_items": [
+                {"path": item.path, "size_bytes": item.size_bytes}
+                for item in preview.affected_items
+            ],
+            "expected_effect": preview.expected_effect,
+            "side_effects": preview.side_effects,
+            "risk_level": preview.risk_level,
+            "blast_radius": preview.blast_radius,
+            "reversible": preview.reversible,
+            "rollback_available": preview.rollback_available,
+            "rollback_description": preview.rollback_description,
+            "requires_admin": preview.requires_admin,
+            "confirmation_required": preview.confirmation_required,
+            "limitations": preview.limitations,
+            "warnings": preview.warnings,
+            "omitted_count": preview.omitted_count,
+            "fingerprint": preview.fingerprint,
+            "permanent_deletion": preview.permanent_deletion,
+        }
+        print(json_mod.dumps(output, indent=2, default=str))
+        return 0
+
+    # Human-readable output
+    status_marker = {
+        PreviewStatus.READY: "[READY]",
+        PreviewStatus.STALE: "[STALE]",
+        PreviewStatus.INSUFFICIENT_EVIDENCE: "[INSUFFICIENT EVIDENCE]",
+        PreviewStatus.BLOCKED: "[BLOCKED]",
+        PreviewStatus.UNAVAILABLE: "[UNAVAILABLE]",
+        PreviewStatus.ERROR: "[ERROR]",
+    }.get(preview.status, f"[{preview.status.value.upper()}]")
+
+    print(f"  Status:   {status_marker}")
+    print(f"  Action:   {preview.action_id}")
+    print(f"  Title:    {preview.title}")
+    print(f"  Summary:  {preview.summary}")
+    print(f"  Target:   {preview.target}")
+    print()
+
+    if preview.affected_count > 0:
+        print(f"  Affected: {preview.affected_count} items ({preview.affected_bytes:,} bytes)")
+        if preview.affected_items:
+            print(f"  Targets:")
+            for item in preview.affected_items[:10]:
+                print(f"    - {item.path} ({item.size_bytes:,} bytes)")
+            if preview.omitted_count > 0:
+                print(f"    ... and {preview.omitted_count} more")
+        print()
+
+    print(f"  Expected: {preview.expected_effect}")
+    print(f"  Risk:     {preview.risk_level}")
+    print(f"  Reversible: {'yes' if preview.reversible else 'no'}")
+    print(f"  Rollback:   {'available' if preview.rollback_available else 'unavailable'}")
+    if preview.rollback_description:
+        print(f"  Rollback:   {preview.rollback_description}")
+    print(f"  Confirmation required: {'yes' if preview.confirmation_required else 'no'}")
+    print()
+
+    if preview.side_effects:
+        print("  Side effects:")
+        for se in preview.side_effects:
+            print(f"    - {se}")
+        print()
+
+    if preview.warnings:
+        print("  Warnings:")
+        for w in preview.warnings:
+            print(f"    - {w}")
+        print()
+
+    if preview.limitations:
+        print("  Limitations:")
+        for lim in preview.limitations:
+            print(f"    - {lim}")
+        print()
+
+    return 0
+
+
 def cmd_files_scan(args: argparse.Namespace) -> int:
     """Scan a directory and run file analysis."""
     from app.file_analysis.runner import run_file_analysis
@@ -1098,6 +1248,18 @@ def main() -> int:
         help="Filter by action ID"
     )
 
+    # actions preview-candidate
+    preview_candidate_parser = actions_sub.add_parser(
+        "preview-candidate", help="Preview an action candidate (read-only)"
+    )
+    preview_candidate_parser.add_argument(
+        "candidate_id", help="Candidate ID to preview"
+    )
+    preview_candidate_parser.add_argument(
+        "--json", action="store_true", dest="json_output",
+        help="Output as JSON"
+    )
+
     # diagnostics subcommand
     diag_parser = sub.add_parser("diagnostics", help="Run read-only advanced diagnostics")
     diag_parser.add_argument(
@@ -1144,6 +1306,8 @@ def main() -> int:
             return cmd_actions_rollback(args)
         if args.actions_command == "candidates":
             return cmd_actions_candidates(args)
+        if args.actions_command == "preview-candidate":
+            return cmd_actions_preview_candidate(args)
         return cmd_actions(args)
     # Default: discover
     return cmd_discover(args)

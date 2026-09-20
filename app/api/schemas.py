@@ -149,6 +149,44 @@ class ActionCandidatesResponse(BaseModel):
     total_count: int = 0
 
 
+class PreviewItemResponse(BaseModel):
+    path: str
+    size_bytes: int
+    modified_at: str | None = None
+    fingerprint: str = ""
+
+
+class PreviewResponse(BaseModel):
+    preview_id: str
+    candidate_id: str
+    action_id: str
+    generated_at: str
+    status: str
+    title: str
+    summary: str
+    target: str
+    affected_count: int
+    affected_bytes: int
+    affected_items: list[PreviewItemResponse] = []
+    expected_effect: str = ""
+    side_effects: list[str] = []
+    risk_level: str = ""
+    blast_radius: str = ""
+    reversible: bool = False
+    rollback_available: bool = False
+    rollback_description: str = ""
+    requires_admin: bool = False
+    confirmation_required: bool = True
+    evidence: list[dict[str, Any]] = []
+    source_runs: list[int] = []
+    freshness_status: str = ""
+    limitations: list[str] = []
+    warnings: list[str] = []
+    omitted_count: int = 0
+    fingerprint: str = ""
+    permanent_deletion: bool = False
+
+
 class DiagnosticResultResponse(BaseModel):
     diagnostic_id: str
     category: str

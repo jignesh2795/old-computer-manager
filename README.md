@@ -4,7 +4,7 @@ A local-first, read-only computer intelligence system for understanding, diagnos
 
 ## Version
 
-**v0.13.0-alpha** — Diagnostic-to-Action Intelligence
+**v0.14.0-alpha** — Candidate Preview Intelligence
 
 ## Purpose
 
@@ -131,6 +131,7 @@ old-computer-manager actions preview <action_id>
 old-computer-manager actions execute <action_id>
 old-computer-manager actions rollback <record_id>
 old-computer-manager actions candidates [--json] [--status X] [--action X]
+old-computer-manager actions preview-candidate <candidate_id> [--json]
 ```
 
 - **actions**: List registered remediation actions
@@ -138,6 +139,7 @@ old-computer-manager actions candidates [--json] [--status X] [--action X]
 - **execute**: Execute an action with validation and confirmation
 - **rollback**: Restore a quarantined file to its original location
 - **candidates**: List action candidates (read-only, no execution authority)
+- **preview-candidate**: Preview an action candidate (read-only, no execution authority)
 
 ### Advanced Diagnostics
 
@@ -206,6 +208,7 @@ All endpoints are GET-only and read-only. The server binds to localhost only.
 | `GET /api/v1/diagnostics/windows` | Windows health diagnostics |
 | `GET /api/v1/remediation/candidates` | Action candidates (available/proposed/blocked/insufficient_evidence/stale) |
 | `GET /api/v1/remediation/candidates/{candidate_id}` | Action candidate detail |
+| `GET /api/v1/remediation/candidates/{candidate_id}/preview` | Action candidate preview (read-only) |
 
 ### Interactive Documentation
 

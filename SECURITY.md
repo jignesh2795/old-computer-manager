@@ -113,6 +113,30 @@ The action candidate system (`app/remediation/candidates.py` and `app/remediatio
 - **Freshness-limited**: Candidates have `stale_after` timestamps
 - **Blocked actions**: High-risk actions (startup.disable_entry, service.*, software.uninstall, network.*, power.*) are always blocked
 
+## Preview Safety (Phase 11B)
+
+The preview layer (`app/remediation/preview.py`) generates read-only descriptions of what would happen if an action were executed:
+
+### What Preview Cannot Do
+
+- **No execution authority**: Preview does not execute, confirm, or rollback actions
+- **No executor import**: Preview module has no import of the executor module
+- **No confirmation tokens**: Preview does not create or consume confirmation tokens
+- **No rollback execution**: Preview does not perform file restoration
+- **No subprocess/shell**: No `subprocess`, `shell=True`, or `os.system` in preview.py
+- **No file system access**: Preview does not read, write, delete, or move files
+- **No audit records**: Preview does not create execution audit records
+- **No authorization**: Preview is informational only, never grants permission to execute
+
+### What Preview Does
+
+- **Deterministic**: Same candidate always produces the same preview
+- **Bounded**: MAX_PREVIEW_ITEMS=20 limits target lists
+- **Frozen**: Preview dataclass is immutable
+- **Factual wording**: Preview uses objective language ("Move X files" not "Safely clean")
+- **Freshness-aware**: Preview refuses to present stale evidence as current targets
+- **Status-appropriate**: Different preview content for available/proposed/blocked/insufficient_evidence/stale
+
 ## AI Safety Boundary
 
 The AI advisory layer (`app/ai/`) is strictly read-only and has no access to system modification capabilities.

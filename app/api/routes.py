@@ -393,6 +393,99 @@ def get_action_candidate_detail_endpoint(
     raise HTTPException(status_code=404, detail=f"Candidate '{candidate_id}' not found")
 
 
+@router.get("/remediation/candidates/{candidate_id}/preview", tags=["remediation"])
+def get_candidate_preview_endpoint(
+    candidate_id: str,
+    report: HealthReport = Depends(get_report),
+) -> dict[str, Any]:
+    """Return a read-only preview for an action candidate.
+
+    The preview explains what WOULD happen if the action were executed.
+    It does NOT execute, confirm, or create any authorization token.
+    """
+    from app.remediation.preview import build_preview, PreviewItem
+    from app.remediation.candidates import ActionCandidate, CandidateStatus, EvidenceSource, EvidenceSourceType
+
+    # Find the candidate
+    candidate_data = None
+    for c in report.action_candidates.candidates:
+        if c.get("candidate_id") == candidate_id:
+            candidate_data = c
+            break
+
+    if candidate_data is None:
+        raise HTTPException(status_code=404, detail=f"Candidate '{candidate_id}' not found")
+
+    # Reconstruct ActionCandidate from dict
+    evidence_list = []
+    for ev_dict in candidate_data.get("evidence", []):
+        source_type_str = ev_dict.get("source_type", "discovery")
+        try:
+            source_type = EvidenceSourceType(source_type_str)
+        except ValueError:
+            source_type = EvidenceSourceType.DISCOVERY
+        evidence_list.append(EvidenceSource(
+            source_type=source_type,
+            source_id=ev_dict.get("source_id", ""),
+            observation=ev_dict.get("observation", ""),
+        ))
+
+    try:
+        status_enum = CandidateStatus(candidate_data.get("status", "unavailable"))
+    except ValueError:
+        status_enum = CandidateStatus.AVAILABLE
+
+    candidate = ActionCandidate(
+        candidate_id=candidate_data.get("candidate_id", ""),
+        action_id=candidate_data.get("action_id", ""),
+        status=status_enum,
+        title=candidate_data.get("title", ""),
+        reason=candidate_data.get("reason", ""),
+        risk_level=candidate_data.get("risk_level", ""),
+        reversible=candidate_data.get("reversible", False),
+        requires_admin=candidate_data.get("requires_admin", False),
+        limitations=candidate_data.get("limitations", []),
+        evidence=evidence_list,
+        discovery_run_id=candidate_data.get("discovery_run_id"),
+    )
+
+    preview = build_preview(candidate)
+
+    return {
+        "preview_id": preview.preview_id,
+        "candidate_id": preview.candidate_id,
+        "action_id": preview.action_id,
+        "generated_at": preview.generated_at,
+        "status": preview.status.value,
+        "title": preview.title,
+        "summary": preview.summary,
+        "target": preview.target,
+        "affected_count": preview.affected_count,
+        "affected_bytes": preview.affected_bytes,
+        "affected_items": [
+            {"path": item.path, "size_bytes": item.size_bytes, "modified_at": item.modified_at, "fingerprint": item.fingerprint}
+            for item in preview.affected_items
+        ],
+        "expected_effect": preview.expected_effect,
+        "side_effects": preview.side_effects,
+        "risk_level": preview.risk_level,
+        "blast_radius": preview.blast_radius,
+        "reversible": preview.reversible,
+        "rollback_available": preview.rollback_available,
+        "rollback_description": preview.rollback_description,
+        "requires_admin": preview.requires_admin,
+        "confirmation_required": preview.confirmation_required,
+        "evidence": preview.evidence,
+        "source_runs": preview.source_runs,
+        "freshness_status": preview.freshness_status,
+        "limitations": preview.limitations,
+        "warnings": preview.warnings,
+        "omitted_count": preview.omitted_count,
+        "fingerprint": preview.fingerprint,
+        "permanent_deletion": preview.permanent_deletion,
+    }
+
+
 @router.get("/system", response_model=SystemResponse, tags=["system"])
 def get_system_endpoint(report: HealthReport = Depends(get_report)) -> SystemResponse:
     """Return the system section from the latest discovery."""
