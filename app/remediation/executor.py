@@ -108,6 +108,7 @@ class BaseExecutor(ABC):
             if result.success:
                 final_status = AuditStatus.SUCCEEDED
             elif result.details.get("files_moved", 0) > 0:
+                # Moved files but something went wrong (persistence errors, etc.)
                 final_status = AuditStatus.PARTIALLY_SUCCEEDED
             else:
                 final_status = AuditStatus.FAILED
@@ -287,61 +288,88 @@ class QuarantineExecutor(BaseExecutor):
 
         cresult = execute_cleanup(age_days=age_days)
 
-        # Create quarantine records for moved files
+        # Create quarantine records from authoritative MoveRecords
+        # (created immediately after each successful shutil.move)
         record_ids: list[int] = []
-        if cresult.files_moved > 0:
-            from app.remediation.quarantine import get_quarantine_dir
+        persistence_errors: list[str] = []
+
+        if cresult.move_records:
             from app.remediation.quarantine_store import QuarantineRecord
-            from pathlib import Path
-            import time
 
-            quarantine_dir = Path(cresult.quarantine_dir)
-            if quarantine_dir.exists():
-                for entry in quarantine_dir.iterdir():
-                    if entry.is_file():
-                        # Check if this file was just moved (within last 5 seconds)
-                        try:
-                            stat = entry.stat()
-                            if time.time() - stat.st_mtime < 5:
-                                record = QuarantineRecord(
-                                    action_id=action.action_id,
-                                    audit_record_id=audit_record_id,
-                                    original_path="",
-                                    quarantine_path=str(entry),
-                                    original_size=stat.st_size,
-                                    original_mtime=str(stat.st_mtime),
-                                )
-                                rid = self._quarantine_store.create_record(record)
-                                record_ids.append(rid)
-                        except (OSError, PermissionError):
-                            pass
+            for mr in cresult.move_records:
+                try:
+                    record = QuarantineRecord(
+                        action_id=action.action_id,
+                        audit_record_id=audit_record_id,
+                        original_path=mr.original_path,
+                        quarantine_path=mr.quarantine_path,
+                        original_size=mr.original_size,
+                        original_mtime=mr.original_mtime_iso,
+                    )
+                    rid = self._quarantine_store.create_record(record)
+                    record_ids.append(rid)
+                except (OSError, PermissionError) as exc:
+                    # Move succeeded but record creation failed — distinct error
+                    msg = (
+                        f"Move succeeded but quarantine record creation failed "
+                        f"for {mr.original_path}: {exc}"
+                    )
+                    persistence_errors.append(msg)
 
-        success = cresult.files_failed == 0 and cresult.files_moved > 0
+        # Determine status from actual outcomes
+        files_moved = cresult.files_moved
+        files_failed = cresult.files_failed
+        files_skipped = cresult.files_skipped
+        persistence_failures = len(persistence_errors)
+
+        if files_moved == 0:
+            success = False
+        elif files_failed > 0 or persistence_failures > 0:
+            success = False
+        else:
+            success = True
+
         message = (
-            f"Temp cleanup complete: {cresult.files_moved} files quarantined, "
-            f"{cresult.files_skipped} skipped, {cresult.files_failed} failed.  "
+            f"Temp cleanup complete: {files_moved} files quarantined, "
+            f"{files_skipped} skipped, {files_failed} failed.  "
             f"Total bytes moved: {cresult.bytes_moved}."
         )
+
+        if persistence_failures > 0:
+            message += (
+                f"  WARNING: {persistence_failures} quarantine record(s) "
+                f"could not be persisted — rollback may be unavailable "
+                f"for those files."
+            )
+
+        details = {
+            "files_examined": cresult.files_examined,
+            "candidates": cresult.candidates,
+            "files_moved": files_moved,
+            "files_skipped": files_skipped,
+            "files_failed": files_failed,
+            "bytes_moved": cresult.bytes_moved,
+            "skip_reasons": cresult.skip_reasons,
+            "failure_reasons": cresult.failure_reasons,
+            "quarantine_record_ids": record_ids,
+            "quarantine_dir": cresult.quarantine_dir,
+            "persistence_errors": persistence_errors,
+            "persistence_failures": persistence_failures,
+        }
 
         return ExecutionResult(
             action_id=action.action_id,
             success=success,
             simulated=False,
-            rollback_available=True,
+            rollback_available=files_moved > 0,
             audit_record_id=audit_record_id,
             message=message,
-            details={
-                "files_examined": cresult.files_examined,
-                "candidates": cresult.candidates,
-                "files_moved": cresult.files_moved,
-                "files_skipped": cresult.files_skipped,
-                "files_failed": cresult.files_failed,
-                "bytes_moved": cresult.bytes_moved,
-                "skip_reasons": cresult.skip_reasons,
-                "failure_reasons": cresult.failure_reasons,
-                "quarantine_record_ids": record_ids,
-                "quarantine_dir": cresult.quarantine_dir,
-            },
+            error_message=(
+                "; ".join(persistence_errors)
+                if persistence_errors
+                else None
+            ),
+            details=details,
         )
 
 

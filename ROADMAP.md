@@ -119,6 +119,28 @@ This document tracks completed milestones and potential future directions for Ol
 
 ---
 
+### v0.15.1-alpha — Execution Accounting Hardening ✓
+
+**Status**: 2026-09-20 (patch release)
+
+**Capabilities**:
+- MoveRecord-based authoritative execution accounting
+- Per-file quarantine record creation from actual move outcomes
+- Removed `mtime < 5 seconds` heuristic
+- Persistence failure handling with explicit error reporting
+- Quarantine reconciliation (orphaned files, broken records, empty original_path)
+- `original_path` now preserved correctly for rollback
+- Execution status: `succeeded` / `partially_succeeded` / `failed` based on actual outcomes
+- 25 new tests (execution accounting + synthetic integration), 1001 total backend tests
+
+**Design decisions**:
+- Execution result derived from MoveRecord list, not from re-scanning the filesystem
+- Successful `shutil.move` is the authoritative signal for quarantine record creation
+- Persistence failure is a distinct error state from move failure
+- Reconciliation is read-only (no automatic restore/delete)
+
+---
+
 ### v0.15.0-alpha — Controlled Execution Pipeline ✓
 
 **Status**: 2026-09-20 (release freeze)
@@ -259,6 +281,6 @@ The following features are **not implemented** and represent potential developme
 
 No arbitrary dates or version numbers are committed to in advance. Development proceeds through milestones based on user needs and technical readiness.
 
-Current version: **v0.15.0-alpha**
+Current version: **v0.15.1-alpha**
 
 Next version will be determined when sufficient new functionality warrants a release.

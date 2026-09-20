@@ -559,7 +559,11 @@ class TestAPIPreview:
         def override_get_report() -> HealthReport:
             return build_health_report(store)
 
+        def override_get_store() -> SnapshotStore:
+            return store
+
         app.dependency_overrides[dependencies.get_report] = override_get_report
+        app.dependency_overrides[dependencies.get_store] = override_get_store
         client = TestClient(app)
 
         r = client.get("/api/v1/remediation/candidates")
@@ -589,7 +593,11 @@ class TestAPIPreview404:
         def override_get_report() -> HealthReport:
             return build_health_report(store)
 
+        def override_get_store() -> SnapshotStore:
+            return store
+
         app.dependency_overrides[dependencies.get_report] = override_get_report
+        app.dependency_overrides[dependencies.get_store] = override_get_store
         client = TestClient(app)
 
         r = client.get("/api/v1/remediation/candidates/nonexistent_preview/preview")

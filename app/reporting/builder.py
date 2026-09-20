@@ -166,6 +166,16 @@ def _build_file_analysis_summary(store: SnapshotStore) -> FileAnalysisSummary:
     if latest is None:
         return FileAnalysisSummary(available=False)
     stats = latest.get("stats", {})
+    scan_id = latest.get("id")
+    # Load child table data
+    large_files = []
+    file_type_summary = []
+    duplicate_group_count = 0
+    if scan_id is not None:
+        large_files = store.load_file_scan_large_files(scan_id)
+        file_type_summary = store.load_file_scan_type_groups(scan_id)
+        duplicate_groups = store.load_file_scan_duplicate_groups(scan_id)
+        duplicate_group_count = len(duplicate_groups)
     return FileAnalysisSummary(
         available=True,
         scan_root=latest.get("scan_root"),
@@ -177,11 +187,11 @@ def _build_file_analysis_summary(store: SnapshotStore) -> FileAnalysisSummary:
         symlinks_skipped=stats.get("symlinks_skipped", 0),
         excluded_items=stats.get("excluded_items", 0),
         inaccessible_items=stats.get("inaccessible_items", 0),
-        largest_files=latest.get("large_files", []),
-        largest_directories=latest.get("directory_sizes", []),
-        file_type_summary=latest.get("file_types", []),
-        duplicate_groups=latest.get("duplicate_group_count", 0),
-        potential_duplicate_bytes=latest.get("duplicate_bytes_saved", 0),
+        largest_files=large_files,
+        largest_directories=[],
+        file_type_summary=file_type_summary,
+        duplicate_groups=duplicate_group_count,
+        potential_duplicate_bytes=0,
     )
 
 
@@ -257,6 +267,7 @@ def _build_action_candidates_summary(
     file_analysis: FileAnalysisSummary,
     findings: FindingsGrouped,
     discovery_run_id: int | None,
+    store: SnapshotStore | None = None,
 ) -> ActionCandidateSummary:
     """Build action candidates from current report data using the policy engine."""
     from app.remediation.candidates import CandidateStatus
@@ -277,8 +288,17 @@ def _build_action_candidates_summary(
     if file_analysis.available:
         file_analysis_dict = {
             "scan_source": file_analysis.scan_root or "unknown",
-            "eligible_temp_files": [],  # Populated from file scan if available
         }
+        # Load persisted eligible temp file evidence from the store
+        eligible_temp_files: list[dict[str, Any]] = []
+        if store is not None:
+            try:
+                temp_evidence = store.get_latest_eligible_temp_evidence()
+                if temp_evidence is not None:
+                    eligible_temp_files = temp_evidence.get("eligible_files", [])
+            except Exception:
+                pass
+        file_analysis_dict["eligible_temp_files"] = eligible_temp_files
 
     findings_list = []
     for f in findings.critical + findings.warning:
@@ -385,7 +405,7 @@ def build_health_report(store: SnapshotStore | None = None) -> HealthReport:
     remediation = _build_remediation_summary()
     diagnostics = _build_diagnostics_summary(store)
     action_candidates = _build_action_candidates_summary(
-        storage, file_analysis, findings, run_id,
+        storage, file_analysis, findings, run_id, store=store,
     )
 
     return HealthReport(

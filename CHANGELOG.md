@@ -4,6 +4,35 @@ All notable changes to Old Computer Manager will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [v0.15.1-alpha] - 2026-09-20
+
+### Phase 11D.2 — Execution Accounting Hardening
+
+This patch release fixes two execution-accounting defects discovered during the first live remediation test. The execution path now produces authoritative, deterministic accounting instead of relying on timestamp heuristics.
+
+#### Bug Fixes
+- **Execution result based on actual mutation**: `execute_cleanup()` now returns per-file `MoveRecord`s created immediately after each successful `shutil.move`. No second TEMP scan determines the outcome.
+- **Removed `mtime < 5 seconds` heuristic**: Quarantine records are created from `MoveRecord` data, not from scanning the quarantine directory for recently-modified files.
+- **Persistence failure is explicit**: If a quarantine record cannot be created after a successful move, the execution reports `persistence_failures` with distinct error messages. `rollback_available=True` is preserved. Users are warned about unavailable rollback.
+- **Quarantine records now have `original_path`**: Previously always `""`, which made rollback permanently impossible. Now populated from `MoveRecord.original_path`.
+- **Execution status semantics**: `success=True` only when all files moved AND all records persisted. `PARTIALLY_SUCCEEDED` when some moved but persistence failed.
+
+#### New Features
+- `MoveRecord` dataclass in `cleanup_temp.py`: Authoritative per-file move record with `original_path`, `quarantine_path`, `original_size`, `original_mtime_iso`
+- `reconcile_quarantine()` in `quarantine_store.py`: Detects orphaned files, broken records, and empty `original_path` conditions
+- `ReconciliationIssue` dataclass for structured inconsistency reporting
+
+#### Tests
+- 25 new tests in `tests/test_execution_accounting.py` (A-Q + synthetic integration)
+- Synthetic integration test: 3 files → move → quarantine records → reconciliation → rollback → all restored
+- Full suite: 1001 passed, 10 skipped
+
+#### First Live Test Findings
+- Real execution moved 3 files successfully; rollback restored all 3 correctly
+- Execution reported `failed` with `files_moved=0` despite actual mutation (now fixed)
+- Quarantine records table had 0 rows despite successful moves (now fixed)
+- `QuarantineStore` and `AuditStore` required explicit `db_path` (fixed in v0.15.0)
+
 ## [v0.15.0-alpha] - 2026-09-20
 
 ### Phase 11C + 11D — Explicit Human Confirmation + Controlled Execution

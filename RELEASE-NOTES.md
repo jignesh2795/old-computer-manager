@@ -1,3 +1,45 @@
+# Release Notes: v0.15.1-alpha
+
+**Execution Accounting Hardening — Patch Release**
+
+Released: 2026-09-20
+
+## Summary
+
+Old Computer Manager v0.15.1-alpha fixes two execution-accounting defects discovered during the first live remediation test. The execution path now produces authoritative, deterministic accounting based on actual file mutation outcomes, not timestamp heuristics.
+
+## What Changed
+
+### Execution Accounting
+- `execute_cleanup()` now returns per-file `MoveRecord`s created immediately after each successful `shutil.move`
+- No second TEMP/quarantine scan determines the execution outcome
+- `files_moved == len(move_records)` — accounting is derived from actual operations
+
+### Quarantine Records
+- Records created from `MoveRecord` data with full `original_path` (was always `""` before)
+- Removed `mtime < 5 seconds` heuristic for quarantine record creation
+- Persistence failure is a distinct error state with explicit reporting
+
+### Reconciliation
+- New `reconcile_quarantine()` function detects orphaned files, broken records, and empty `original_path` conditions
+- Read-only — no automatic restore or delete
+
+## First Live Test Findings
+
+During the first live test, the system:
+- Successfully moved 3 test files from TEMP to quarantine
+- Successfully rolled back all 3 files to their original locations
+- Reported `failed` with `files_moved=0` despite actual mutation (now fixed)
+- Created 0 quarantine records despite successful moves (now fixed)
+
+## Test Results
+
+- 1001 passed, 10 skipped
+- 25 new tests covering execution accounting, persistence failure, reconciliation, and synthetic integration
+- Synthetic integration test: 3 files → move → quarantine records → reconciliation → rollback → all restored
+
+---
+
 # Release Notes: v0.15.0-alpha
 
 **Controlled Execution Pipeline — First Real System Changes**

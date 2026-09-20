@@ -214,3 +214,77 @@ def _row_to_record(row: tuple) -> QuarantineRecord:
         restored_at=row[9],
         error_message=row[10],
     )
+
+
+@dataclass(frozen=True)
+class ReconciliationIssue:
+    """A quarantine consistency issue found during reconciliation."""
+
+    issue_type: str  # "record_without_file", "file_without_record", "path_mismatch"
+    record_id: int | None = None
+    quarantine_path: str = ""
+    original_path: str = ""
+    detail: str = ""
+
+
+def reconcile_quarantine(
+    quarantine_dir: Path,
+    store: QuarantineStore,
+) -> list[ReconciliationIssue]:
+    """Check quarantine consistency between filesystem and database.
+
+    Identifies:
+    - quarantine file with no matching record (orphaned file)
+    - record with missing quarantine file (broken reference)
+    - record with mismatched original_path (data integrity)
+
+    Does NOT restore or delete anything. Reports only.
+    """
+    issues: list[ReconciliationIssue] = []
+
+    # Load all non-restored records
+    records = store.list_records(restored=False)
+    record_by_qpath = {r.quarantine_path: r for r in records}
+
+    # Check each quarantine file
+    if quarantine_dir.exists():
+        for entry in quarantine_dir.iterdir():
+            if not entry.is_file():
+                continue
+            qpath = str(entry)
+            if qpath in record_by_qpath:
+                rec = record_by_qpath[qpath]
+                # Verify original_path is not empty
+                if not rec.original_path:
+                    issues.append(ReconciliationIssue(
+                        issue_type="empty_original_path",
+                        record_id=rec.id,
+                        quarantine_path=qpath,
+                        original_path="",
+                        detail=(
+                            f"Record #{rec.id} has empty original_path "
+                            f"— rollback impossible"
+                        ),
+                    ))
+            else:
+                issues.append(ReconciliationIssue(
+                    issue_type="file_without_record",
+                    quarantine_path=qpath,
+                    detail=f"Quarantine file has no database record: {entry.name}",
+                ))
+
+    # Check for records pointing to missing files
+    for rec in records:
+        qpath = rec.quarantine_path
+        if not Path(qpath).exists():
+            issues.append(ReconciliationIssue(
+                issue_type="record_without_file",
+                record_id=rec.id,
+                quarantine_path=qpath,
+                original_path=rec.original_path,
+                detail=(
+                    f"Record #{rec.id} references missing file: {qpath}"
+                ),
+            ))
+
+    return issues

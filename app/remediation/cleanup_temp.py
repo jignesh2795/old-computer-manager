@@ -105,6 +105,24 @@ class CleanupPreview:
     limit_exceeded: bool
 
 
+@dataclass(frozen=True)
+class MoveRecord:
+    """Authoritative record of a single file move operation.
+
+    Created immediately after a successful shutil.move.
+    The successful move itself is the authoritative signal.
+    """
+
+    original_path: str
+    quarantine_path: str
+    original_size: int
+    original_mtime: float
+    original_mtime_iso: str
+    quarantine_record_id: int | None = None
+    record_persisted: bool = False
+    persistence_error: str | None = None
+
+
 @dataclass
 class CleanupResult:
     """Result of executing disk.cleanup_temp.
@@ -122,6 +140,8 @@ class CleanupResult:
     failure_reasons: dict[str, str] = field(default_factory=dict)
     quarantine_record_ids: list[int] = field(default_factory=list)
     quarantine_dir: str = ""
+    # Per-file move records — authoritative accounting of what actually moved
+    move_records: list[MoveRecord] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -330,7 +350,20 @@ def execute_cleanup(
 
         # Move using existing shutil.move (NEVER delete)
         try:
+            from datetime import datetime, timezone
+            original_mtime_iso = datetime.fromtimestamp(
+                ef.mtime, tz=timezone.utc
+            ).isoformat()
             shutil.move(str(ef.path), str(dest))
+            # Move succeeded — create authoritative MoveRecord immediately
+            move_record = MoveRecord(
+                original_path=str(ef.path),
+                quarantine_path=str(dest),
+                original_size=ef.size,
+                original_mtime=ef.mtime,
+                original_mtime_iso=original_mtime_iso,
+            )
+            result.move_records.append(move_record)
             result.files_moved += 1
             result.bytes_moved += ef.size
         except (OSError, PermissionError) as exc:

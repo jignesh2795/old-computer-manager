@@ -397,6 +397,7 @@ def get_action_candidate_detail_endpoint(
 def get_candidate_preview_endpoint(
     candidate_id: str,
     report: HealthReport = Depends(get_report),
+    store: SnapshotStore = Depends(get_store),
 ) -> dict[str, Any]:
     """Return a read-only preview for an action candidate.
 
@@ -449,7 +450,16 @@ def get_candidate_preview_endpoint(
         discovery_run_id=candidate_data.get("discovery_run_id"),
     )
 
-    preview = build_preview(candidate)
+    # Load persisted eligible temp file evidence for preview
+    file_analysis_for_preview = None
+    temp_evidence = store.get_latest_eligible_temp_evidence()
+    if temp_evidence is not None:
+        file_analysis_for_preview = {
+            "scan_source": temp_evidence.get("scan_root", "unknown"),
+            "eligible_temp_files": temp_evidence.get("eligible_files", []),
+        }
+
+    preview = build_preview(candidate, file_analysis=file_analysis_for_preview)
 
     return {
         "preview_id": preview.preview_id,

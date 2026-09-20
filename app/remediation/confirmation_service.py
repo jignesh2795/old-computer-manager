@@ -160,6 +160,70 @@ class ConfirmationStore:
         return len(self._records)
 
 
+class SqliteConfirmationStore:
+    """SQLite-backed confirmation store that persists across CLI processes."""
+
+    def __init__(self, db_store: Any | None = None) -> None:
+        if db_store is None:
+            from app.database.sqlite import SnapshotStore
+            db_store = SnapshotStore()
+        self._db = db_store
+
+    def add(self, record: ConfirmationRecord) -> None:
+        """Persist a confirmation record to SQLite."""
+        self._db.save_confirmation(
+            confirmation_id=record.confirmation_id,
+            candidate_id=record.candidate_id,
+            action_id=record.action_id,
+            preview_id=record.preview_id,
+            preview_fingerprint=record.preview_fingerprint,
+            confirmed_at=record.confirmed_at,
+            confirmation_token_secret=record.confirmation_token_secret,
+        )
+
+    def get(self, confirmation_id: str) -> ConfirmationRecord | None:
+        """Retrieve a confirmation record by ID."""
+        row = self._db.get_confirmation(confirmation_id)
+        if row is None:
+            return None
+        return ConfirmationRecord(
+            confirmation_id=row["confirmation_id"],
+            candidate_id=row["candidate_id"],
+            action_id=row["action_id"],
+            preview_id=row["preview_id"],
+            preview_fingerprint=row["preview_fingerprint"],
+            confirmed_at=row["confirmed_at"],
+            confirmation_token_secret=row["confirmation_token_secret"],
+            consumed=row["consumed"],
+        )
+
+    def get_for_candidate(self, candidate_id: str) -> list[ConfirmationRecord]:
+        """Get all confirmation records for a candidate."""
+        rows = self._db.get_confirmations_for_candidate(candidate_id)
+        return [
+            ConfirmationRecord(
+                confirmation_id=r["confirmation_id"],
+                candidate_id=r["candidate_id"],
+                action_id=r["action_id"],
+                preview_id=r["preview_id"],
+                preview_fingerprint=r["preview_fingerprint"],
+                confirmed_at=r["confirmed_at"],
+                confirmation_token_secret=r["confirmation_token_secret"],
+                consumed=r["consumed"],
+            )
+            for r in rows
+        ]
+
+    def mark_consumed(self, confirmation_id: str) -> None:
+        """Mark a confirmation record as consumed."""
+        self._db.mark_confirmation_consumed(confirmation_id)
+
+    def count(self) -> int:
+        """Number of confirmation records."""
+        rows = self._db.get_confirmations_for_candidate("*")
+        return len(rows)
+
+
 # ---------------------------------------------------------------------------
 # Confirmation service
 # ---------------------------------------------------------------------------
@@ -225,7 +289,8 @@ class ConfirmationService:
 
         # 4. Create confirmation record
         self._counter += 1
-        confirmation_id = f"conf:{candidate.candidate_id}:{self._counter}"
+        import uuid
+        confirmation_id = f"conf:{candidate.candidate_id}:{uuid.uuid4().hex[:12]}"
         now = datetime.now(timezone.utc).isoformat()
 
         # Generate a secret for the token
@@ -397,10 +462,10 @@ _default_service: ConfirmationService | None = None
 
 
 def get_confirmation_service() -> ConfirmationService:
-    """Get or create the module-level ConfirmationService."""
+    """Get or create the module-level ConfirmationService with SQLite-backed store."""
     global _default_store, _default_service
     if _default_service is None:
-        _default_store = ConfirmationStore()
+        _default_store = SqliteConfirmationStore()
         _default_service = ConfirmationService(store=_default_store)
     return _default_service
 

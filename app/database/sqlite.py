@@ -68,6 +68,19 @@ CREATE TABLE IF NOT EXISTS diagnostic_results (
     errors_json TEXT,
     FOREIGN KEY (run_id) REFERENCES diagnostic_runs(id)
 );
+
+CREATE TABLE IF NOT EXISTS confirmations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    confirmation_id TEXT NOT NULL UNIQUE,
+    candidate_id TEXT NOT NULL,
+    action_id TEXT NOT NULL,
+    preview_id TEXT NOT NULL,
+    preview_fingerprint TEXT NOT NULL,
+    confirmed_at TEXT NOT NULL,
+    confirmation_token_secret TEXT NOT NULL,
+    consumed INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
 """
 
 INDEXES = """
@@ -293,6 +306,31 @@ class SnapshotStore:
                 "    paths_json TEXT NOT NULL,"
                 "    FOREIGN KEY (scan_run_id) REFERENCES file_scan_runs(id)"
                 ")"
+            )
+
+        # Create file_scan_eligible_temp_files table if it does not exist
+        cursor = connection.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' "
+            "AND name='file_scan_eligible_temp_files'"
+        )
+        if cursor.fetchone() is None:
+            connection.execute(
+                "CREATE TABLE file_scan_eligible_temp_files ("
+                "    id INTEGER PRIMARY KEY AUTOINCREMENT,"
+                "    scan_run_id INTEGER NOT NULL,"
+                "    scan_root TEXT NOT NULL,"
+                "    scan_timestamp TEXT NOT NULL,"
+                "    age_threshold_days INTEGER NOT NULL,"
+                "    eligible_file_count INTEGER NOT NULL,"
+                "    eligible_total_bytes INTEGER NOT NULL,"
+                "    eligible_files_json TEXT NOT NULL,"
+                "    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,"
+                "    FOREIGN KEY (scan_run_id) REFERENCES file_scan_runs(id)"
+                ")"
+            )
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_eligible_temp_scan_run "
+                "ON file_scan_eligible_temp_files(scan_run_id)"
             )
 
         # Migrate diagnostic_results: add collection_time_ms column
@@ -563,6 +601,69 @@ class SnapshotStore:
                 }
                 for row in cursor.fetchall()
             ]
+
+    def save_file_scan_eligible_temp_files(
+        self,
+        scan_run_id: int,
+        evidence: dict[str, Any],
+    ) -> None:
+        """Persist eligible temp file evidence from an explicit file scan.
+
+        Args:
+            scan_run_id: The file scan run this evidence is associated with.
+            evidence: Dict with keys: scan_root, scan_timestamp,
+                age_threshold_days, eligible_file_count, eligible_total_bytes,
+                eligible_files (list of file dicts).
+        """
+        with self._connect() as connection:
+            eligible_files = evidence.get("eligible_files", [])
+            # Bound the list to prevent unbounded storage
+            bounded_files = eligible_files[:200]
+            connection.execute(
+                "INSERT INTO file_scan_eligible_temp_files("
+                "    scan_run_id, scan_root, scan_timestamp,"
+                "    age_threshold_days, eligible_file_count,"
+                "    eligible_total_bytes, eligible_files_json"
+                ") VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (
+                    scan_run_id,
+                    evidence["scan_root"],
+                    evidence["scan_timestamp"],
+                    evidence["age_threshold_days"],
+                    evidence["eligible_file_count"],
+                    evidence["eligible_total_bytes"],
+                    json.dumps(bounded_files),
+                ),
+            )
+
+    def get_latest_eligible_temp_evidence(self) -> dict[str, Any] | None:
+        """Return the most recent eligible temp file evidence, or None.
+
+        Returns the evidence from the most recent completed file scan
+        that targeted the approved TEMP directory and produced eligibility data.
+        """
+        with self._connect() as connection:
+            cursor = connection.execute(
+                "SELECT scan_run_id, scan_root, scan_timestamp,"
+                "    age_threshold_days, eligible_file_count,"
+                "    eligible_total_bytes, eligible_files_json,"
+                "    created_at "
+                "FROM file_scan_eligible_temp_files "
+                "ORDER BY id DESC LIMIT 1"
+            )
+            row = cursor.fetchone()
+            if row is None:
+                return None
+            return {
+                "scan_run_id": row[0],
+                "scan_root": row[1],
+                "scan_timestamp": row[2],
+                "age_threshold_days": row[3],
+                "eligible_file_count": row[4],
+                "eligible_total_bytes": row[5],
+                "eligible_files": json.loads(row[6]),
+                "created_at": row[7],
+            }
 
     # -- Historical query methods --------------------------------------------
 
@@ -862,3 +963,78 @@ class SnapshotStore:
                     summary[cat] = {}
                 summary[cat][stat] = count
             return summary
+
+    def save_confirmation(
+        self,
+        confirmation_id: str,
+        candidate_id: str,
+        action_id: str,
+        preview_id: str,
+        preview_fingerprint: str,
+        confirmed_at: str,
+        confirmation_token_secret: str,
+    ) -> None:
+        """Persist a confirmation record to the database."""
+        with self._connect() as connection:
+            connection.execute(
+                "INSERT INTO confirmations "
+                "(confirmation_id, candidate_id, action_id, preview_id, "
+                "preview_fingerprint, confirmed_at, confirmation_token_secret, consumed) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, 0)",
+                (confirmation_id, candidate_id, action_id, preview_id,
+                 preview_fingerprint, confirmed_at, confirmation_token_secret),
+            )
+
+    def get_confirmation(self, confirmation_id: str) -> dict[str, Any] | None:
+        """Retrieve a confirmation record by ID."""
+        with self._connect() as connection:
+            cursor = connection.execute(
+                "SELECT confirmation_id, candidate_id, action_id, preview_id, "
+                "preview_fingerprint, confirmed_at, confirmation_token_secret, consumed "
+                "FROM confirmations WHERE confirmation_id = ?",
+                (confirmation_id,),
+            )
+            row = cursor.fetchone()
+            if row is None:
+                return None
+            return {
+                "confirmation_id": row[0],
+                "candidate_id": row[1],
+                "action_id": row[2],
+                "preview_id": row[3],
+                "preview_fingerprint": row[4],
+                "confirmed_at": row[5],
+                "confirmation_token_secret": row[6],
+                "consumed": bool(row[7]),
+            }
+
+    def get_confirmations_for_candidate(self, candidate_id: str) -> list[dict[str, Any]]:
+        """Get all confirmation records for a candidate."""
+        with self._connect() as connection:
+            cursor = connection.execute(
+                "SELECT confirmation_id, candidate_id, action_id, preview_id, "
+                "preview_fingerprint, confirmed_at, confirmation_token_secret, consumed "
+                "FROM confirmations WHERE candidate_id = ? ORDER BY id",
+                (candidate_id,),
+            )
+            return [
+                {
+                    "confirmation_id": row[0],
+                    "candidate_id": row[1],
+                    "action_id": row[2],
+                    "preview_id": row[3],
+                    "preview_fingerprint": row[4],
+                    "confirmed_at": row[5],
+                    "confirmation_token_secret": row[6],
+                    "consumed": bool(row[7]),
+                }
+                for row in cursor.fetchall()
+            ]
+
+    def mark_confirmation_consumed(self, confirmation_id: str) -> None:
+        """Mark a confirmation as consumed."""
+        with self._connect() as connection:
+            connection.execute(
+                "UPDATE confirmations SET consumed = 1 WHERE confirmation_id = ?",
+                (confirmation_id,),
+            )

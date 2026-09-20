@@ -356,11 +356,12 @@ class ControlledExecutionService:
             )
 
         # ── 10. Confirmation token is valid ───────────────────────────
-        from app.remediation.confirmation_service import ConfirmationService, ConfirmationStore
+        from app.remediation.confirmation_service import get_confirmation_service
         if self._confirmation_store is not None:
+            from app.remediation.confirmation_service import ConfirmationService
             conf_service = ConfirmationService(store=self._confirmation_store)
         else:
-            conf_service = ConfirmationService()
+            conf_service = get_confirmation_service()
         conf_record = conf_service.store.get(confirmation_id)
         if conf_record is None:
             raise ConfirmationRequiredError(
@@ -477,7 +478,9 @@ class ControlledExecutionService:
         started_at = datetime.now(timezone.utc).isoformat()
 
         try:
-            result = self._execute_action(action, execution_id, started_at)
+            result = self._execute_action(action, execution_id, started_at,
+                                             candidate_id=candidate.candidate_id,
+                                             confirmation_id=confirmation_id)
         except Exception as exc:
             completed_at = datetime.now(timezone.utc).isoformat()
             result = ControlledExecutionResult(
@@ -502,6 +505,8 @@ class ControlledExecutionService:
         action: Any,
         execution_id: str,
         started_at: str,
+        candidate_id: str = "",
+        confirmation_id: str = "",
     ) -> ControlledExecutionResult:
         """Execute the action through the existing executor."""
         from app.remediation.quarantine_store import QuarantineStore
@@ -509,8 +514,8 @@ class ControlledExecutionService:
         from app.remediation.audit import AuditStore, AuditRecord, AuditStatus
         from app.remediation.confirmation import ConfirmationToken
 
-        quarantine_store = QuarantineStore()
-        audit_store = AuditStore()
+        quarantine_store = QuarantineStore(db_path="data/computer.db")
+        audit_store = AuditStore(db_path="data/computer.db")
         executor = QuarantineExecutor(quarantine_store)
 
         # Create a dummy confirmation token (already consumed by our store)
@@ -550,8 +555,8 @@ class ControlledExecutionService:
             execution_id=execution_id,
             action_id=action.action_id,
             action_version=action.action_version,
-            candidate_id="",
-            confirmation_id="",
+            candidate_id=candidate_id,
+            confirmation_id=confirmation_id,
             discovery_run_id=action.discovery_run_id,
             finding_id=action.finding_id,
             started_at=started_at,

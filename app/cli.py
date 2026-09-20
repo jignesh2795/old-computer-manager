@@ -18,7 +18,7 @@ def cmd_discover(args: argparse.Namespace) -> int:
     """Run a full discovery scan."""
     from app.discovery import run
 
-    print("Old Computer Manager v0.15.0-alpha")
+    print("Old Computer Manager v0.15.1-alpha")
     print("Read-only discovery mode")
     print(f"Platform: {platform.platform()}")
     print(f"Python: {sys.version.split()[0]}")
@@ -39,7 +39,7 @@ def cmd_analyze(args: argparse.Namespace) -> int:
     """Analyze the latest completed discovery run."""
     from app.analyzers.runner import analyze_latest_run
 
-    print("Old Computer Manager v0.15.0-alpha")
+    print("Old Computer Manager v0.15.1-alpha")
     print("Read-only analysis mode\n")
 
     store = SnapshotStore()
@@ -63,7 +63,7 @@ def cmd_actions(args: argparse.Namespace) -> int:
     """List registered remediation actions."""
     from app.remediation.registry import create_default_registry
 
-    print("Old Computer Manager v0.15.0-alpha")
+    print("Old Computer Manager v0.15.1-alpha")
     print("Remediation actions\n")
 
     registry = create_default_registry()
@@ -95,7 +95,7 @@ def cmd_actions_preview(args: argparse.Namespace) -> int:
     from app.remediation.action_preview import preview_action
     import json as json_mod
 
-    print("Old Computer Manager v0.15.0-alpha")
+    print("Old Computer Manager v0.15.1-alpha")
     print(f"Action preview: {args.action_id}\n")
 
     registry = create_default_registry()
@@ -181,7 +181,7 @@ def cmd_actions_execute(args: argparse.Namespace) -> int:
     from app.remediation.audit import AuditStore
     import json as json_mod
 
-    print("Old Computer Manager v0.15.0-alpha")
+    print("Old Computer Manager v0.15.1-alpha")
     print(f"Execute action: {args.action_id}\n")
 
     registry = create_default_registry()
@@ -262,7 +262,7 @@ def cmd_actions_rollback(args: argparse.Namespace) -> int:
     from app.remediation.audit import AuditStore, AuditStatus
     from app.database.sqlite import SnapshotStore
 
-    print("Old Computer Manager v0.15.0-alpha")
+    print("Old Computer Manager v0.15.1-alpha")
     print(f"Rollback quarantine record: {args.record_id}\n")
 
     db_path = Path("data/computer.db")
@@ -310,7 +310,7 @@ def cmd_actions_candidates(args: argparse.Namespace) -> int:
     import json as json_mod
     from app.reporting.builder import build_health_report
 
-    print("Old Computer Manager v0.15.0-alpha")
+    print("Old Computer Manager v0.15.1-alpha")
     print("Action Candidates (read-only, no execution)\n")
 
     report = build_health_report()
@@ -379,7 +379,7 @@ def cmd_actions_preview_candidate(args: argparse.Namespace) -> int:
     from app.remediation.preview import build_preview, PreviewStatus
     from app.remediation.candidates import ActionCandidate, CandidateStatus, EvidenceSource, EvidenceSourceType
 
-    print("Old Computer Manager v0.15.0-alpha")
+    print("Old Computer Manager v0.15.1-alpha")
     print(f"Candidate preview: {args.candidate_id}\n")
 
     report = build_health_report()
@@ -429,7 +429,18 @@ def cmd_actions_preview_candidate(args: argparse.Namespace) -> int:
         discovery_run_id=candidate_data.get("discovery_run_id"),
     )
 
-    preview = build_preview(candidate)
+    # Load persisted eligible temp file evidence for preview
+    from app.database.sqlite import SnapshotStore
+    _store = SnapshotStore()
+    file_analysis_for_preview = None
+    temp_evidence = _store.get_latest_eligible_temp_evidence()
+    if temp_evidence is not None:
+        file_analysis_for_preview = {
+            "scan_source": temp_evidence.get("scan_root", "unknown"),
+            "eligible_temp_files": temp_evidence.get("eligible_files", []),
+        }
+
+    preview = build_preview(candidate, file_analysis=file_analysis_for_preview)
 
     if args.json_output:
         output = {
@@ -533,11 +544,10 @@ def cmd_actions_confirm_candidate(args: argparse.Namespace) -> int:
     from app.remediation.preview import build_preview, PreviewStatus
     from app.remediation.candidates import ActionCandidate, CandidateStatus, EvidenceSource, EvidenceSourceType
     from app.remediation.confirmation_service import (
-        ConfirmationService,
         ConfirmationError,
     )
 
-    print("Old Computer Manager v0.15.0-alpha")
+    print("Old Computer Manager v0.15.1-alpha")
     print(f"Confirm candidate: {args.candidate_id}\n")
 
     report = build_health_report()
@@ -590,7 +600,8 @@ def cmd_actions_confirm_candidate(args: argparse.Namespace) -> int:
     preview = build_preview(candidate)
 
     # Attempt confirmation
-    service = ConfirmationService()
+    from app.remediation.confirmation_service import get_confirmation_service
+    service = get_confirmation_service()
     try:
         record = service.confirm(candidate, preview)
     except ConfirmationError as e:
@@ -637,7 +648,7 @@ def cmd_actions_execute_candidate(args: argparse.Namespace) -> int:
         ExecutionDeniedError,
     )
 
-    print("Old Computer Manager v0.15.0-alpha")
+    print("Old Computer Manager v0.15.1-alpha")
     print(f"Execute candidate: {args.candidate_id}\n")
 
     report = build_health_report()
@@ -770,7 +781,7 @@ def cmd_files_scan(args: argparse.Namespace) -> int:
     from app.file_analysis.runner import run_file_analysis
     from app.database.sqlite import SnapshotStore
 
-    print("Old Computer Manager v0.15.0-alpha")
+    print("Old Computer Manager v0.15.1-alpha")
     print(f"File scan: {args.path}\n")
 
     try:
@@ -821,6 +832,37 @@ def cmd_files_scan(args: argparse.Namespace) -> int:
             }
             for d in result.duplicate_groups
         ])
+
+    # Persist eligible temp file evidence if scan targets approved TEMP dir
+    from app.remediation.quarantine import get_user_temp_dir, scan_eligible_files
+    from app.remediation.cleanup_temp import DEFAULT_AGE_DAYS
+    temp_dir = get_user_temp_dir()
+    if temp_dir is not None:
+        scan_root_resolved = str(Path(result.scan_root).resolve())
+        temp_dir_resolved = str(temp_dir.resolve())
+        if scan_root_resolved == temp_dir_resolved:
+            eligible_files, eligible_count, warnings = scan_eligible_files(
+                temp_dir, DEFAULT_AGE_DAYS
+            )
+            eligible_total_bytes = sum(f.size for f in eligible_files)
+            from datetime import datetime, timezone
+            eligible_evidence = {
+                "scan_root": result.scan_root,
+                "scan_timestamp": datetime.now(timezone.utc).isoformat(),
+                "age_threshold_days": DEFAULT_AGE_DAYS,
+                "eligible_file_count": eligible_count,
+                "eligible_total_bytes": eligible_total_bytes,
+                "eligible_files": [
+                    {
+                        "path": str(f.path),
+                        "size_bytes": f.size,
+                        "mtime": f.mtime,
+                        "mtime_iso": f.mtime_iso,
+                    }
+                    for f in eligible_files[:200]
+                ],
+            }
+            store.save_file_scan_eligible_temp_files(scan_id, eligible_evidence)
 
     # Print results
     print(f"Scan root:    {result.scan_root}")
@@ -878,7 +920,7 @@ def cmd_files_large(args: argparse.Namespace) -> int:
     from app.file_analysis.runner import run_file_analysis
     from app.database.sqlite import SnapshotStore
 
-    print("Old Computer Manager v0.15.0-alpha")
+    print("Old Computer Manager v0.15.1-alpha")
     print("Large file analysis\n")
 
     # Use provided path or latest scan
@@ -928,7 +970,7 @@ def cmd_files_types(args: argparse.Namespace) -> int:
     from app.file_analysis.runner import run_file_analysis
     from app.database.sqlite import SnapshotStore
 
-    print("Old Computer Manager v0.15.0-alpha")
+    print("Old Computer Manager v0.15.1-alpha")
     print("File type analysis\n")
 
     if args.path:
@@ -967,7 +1009,7 @@ def cmd_files_duplicates(args: argparse.Namespace) -> int:
     from app.file_analysis.runner import run_file_analysis
     from app.database.sqlite import SnapshotStore
 
-    print("Old Computer Manager v0.15.0-alpha")
+    print("Old Computer Manager v0.15.1-alpha")
     print("Duplicate file analysis\n")
 
     if args.path:
@@ -1032,7 +1074,7 @@ def cmd_report(args: argparse.Namespace) -> int:
     from app.reporting.runner import generate_report, generate_json, generate_human
     from app.database.sqlite import SnapshotStore
 
-    print("Old Computer Manager v0.15.0-alpha")
+    print("Old Computer Manager v0.15.1-alpha")
     print("Generating health report...\n")
 
     store = SnapshotStore()
@@ -1050,7 +1092,7 @@ def cmd_serve(args: argparse.Namespace) -> int:
     """Start the local read-only API server."""
     import uvicorn
 
-    print("Old Computer Manager v0.15.0-alpha")
+    print("Old Computer Manager v0.15.1-alpha")
     print(f"Starting API server on {args.host}:{args.port}")
     print("This server is intended for localhost use only.")
     print("Press Ctrl+C to stop.\n")
@@ -1068,7 +1110,7 @@ def cmd_ai(args: argparse.Namespace) -> int:
     """Generate AI advisory from the latest completed report."""
     from app.ai.runner import run_advisory, run_advisory_json, AdvisoryRunnerError
 
-    print("Old Computer Manager v0.15.0-alpha")
+    print("Old Computer Manager v0.15.1-alpha")
     print("AI Advisory (local-first, read-only)\n")
 
     try:
@@ -1158,7 +1200,7 @@ def cmd_history(args: argparse.Namespace) -> int:
     """Display historical trend analysis."""
     from app.history.runner import run_history, run_history_json
 
-    print("Old Computer Manager v0.15.0-alpha")
+    print("Old Computer Manager v0.15.1-alpha")
     print("Historical Trend Analysis (read-only)\n")
 
     store = SnapshotStore()
@@ -1259,7 +1301,7 @@ def cmd_diagnostics(args: argparse.Namespace) -> int:
     """Run read-only advanced diagnostics."""
     from app.diagnostics.runner import run_diagnostics, save_diagnostic_run
 
-    print("Old Computer Manager v0.15.0-alpha")
+    print("Old Computer Manager v0.15.1-alpha")
     print("Advanced Diagnostics (read-only)\n")
 
     category = getattr(args, "diagnostics_category", None)
