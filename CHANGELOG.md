@@ -4,6 +4,42 @@ All notable changes to Old Computer Manager will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [v0.12.0-alpha] - 2026-09-20
+
+### Phase 10B + 10B.1 — Useful Diagnostics Expansion + Quality Hardening
+
+This release adds 5 new read-only diagnostic modules (event_log, reliability, boot_timing, network_health, driver_consistency) expanding the diagnostic system to 10 modules total. Also adds `collection_time_ms` on every DiagnosticResult for regression detection, WMI query consolidation for older hardware, and network adapter status via psutil.
+
+#### New Diagnostic Modules
+- `app/diagnostics/event_log.py`: Bounded event log collection (max 200 events, 30-day lookback), grouped by source, recurring error detection
+- `app/diagnostics/reliability.py`: Crash-history diagnostics via single Win32_ReliabilityRecord query (summary, app failures, update failures)
+- `app/diagnostics/boot_timing.py`: Last boot time, uptime, startup program count via psutil + registry
+- `app/diagnostics/network_health.py`: Adapter status (psutil, zero PowerShell), DNS configuration, DNS resolution test
+- `app/diagnostics/driver_consistency.py`: Driver age and error checks via single Win32_PnPEntity query
+
+#### Quality Hardening (10B.1)
+- `collection_time_ms` field on DiagnosticResult for per-result timing
+- `total_time_ms` field on DiagnosticRun for overall run timing
+- Reliability module: 3 WMI queries consolidated to 1
+- Driver consistency: 2 WMI queries consolidated to 1
+- Network adapter status: switched from PowerShell to psutil (zero overhead)
+- Database schema migration for collection_time_ms column
+- API responses include collection_time_ms
+
+#### Added
+- 5 new diagnostic categories in DiagnosticCategory enum: EVENT_LOG, RELIABILITY, BOOT_TIMING, NETWORK_HEALTH, DRIVER_CONSISTENCY
+- New constants: EVENT_LOG_MAX_EVENTS, EVENT_LOG_LOOKBACK_DAYS, EVENT_LOG_ERROR_WARN_THRESHOLD, EVENT_LOG_RECURRING_THRESHOLD, RELIABILITY_MAX_EVENTS, RELIABILITY_LOOKBACK_DAYS, RELIABILITY_CRASH_WARN_THRESHOLD, BOOT_SLOW_SECONDS, DRIVER_AGE_WARN_DAYS, DRIVER_MAX_RETURNED, NETWORK_DNS_TIMEOUT
+- 5 new GET-only API endpoints: /diagnostics/event-log, /diagnostics/reliability, /diagnostics/boot-timing, /diagnostics/network-health, /diagnostics/driver-consistency
+- 25 new regression tests for all Phase 10B categories
+- DiagnosticRun properties: event_log_results, reliability_results, boot_timing_results, network_health_results, driver_consistency_results
+
+#### Tests
+- 766 backend tests passing, 8 skipped
+- 13 frontend tests passing
+- Observed ~15s total diagnostic runtime on HP Pavilion 15-ab023tx
+
+---
+
 ## [v0.11.0-alpha] - 2026-09-19
 
 ### Phase 10A + 10A.1 — Read-Only Advanced Diagnostics + Quality Hardening

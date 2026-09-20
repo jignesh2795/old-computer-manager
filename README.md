@@ -4,7 +4,7 @@ A local-first, read-only computer intelligence system for understanding, diagnos
 
 ## Version
 
-**v0.11.0-alpha** — Read-Only Advanced Diagnostics
+**v0.12.0-alpha** — Useful Diagnostics Expansion
 
 ## Purpose
 

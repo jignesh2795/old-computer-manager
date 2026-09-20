@@ -13,6 +13,7 @@ This document tracks completed milestones and potential future directions for Ol
 - Per-module failure isolation — failure in one never aborts others
 - DiagnosticStatus distinguishes unavailable from hardware problem
 - Memory diagnostic correctly handles `psutil.swap_memory()` failures (corporate Windows)
+- Disk I/O reports cumulative + rate-based metrics with 1s sampling window
 - Disk I/O rate-based warnings (100 MB/s threshold); cumulative bytes are informational telemetry
 - Snapshot-vs-trend wording: observations are clearly snapshots, not long-term conditions
 - All thresholds centralized in constants.py
@@ -22,6 +23,38 @@ This document tracks completed milestones and potential future directions for Ol
 - AI context includes diagnostics summary
 - History tracks diagnostic metrics
 - 741 total backend tests, 13 frontend tests
+
+---
+
+### v0.12.0-alpha — Useful Diagnostics Expansion ✓
+
+**Status**: 2026-09-20 (release freeze)
+
+**Capabilities**:
+- 5 new read-only diagnostic modules: event_log, reliability, boot_timing, network_health, driver_consistency
+- Bounded event log collection (max 200 events, 30-day lookback, grouped by source)
+- Recurring error source detection across system and application logs
+- Reliability/crash-history diagnostics via single Win32_ReliabilityRecord query
+- Boot timing: last boot time, uptime, startup program count (psutil + registry)
+- Network health: adapter status (psutil, zero PowerShell), DNS config, DNS resolution test
+- Driver consistency: age and error checks via single Win32_PnPEntity query
+- `collection_time_ms` on every DiagnosticResult for regression detection
+- `total_time_ms` on DiagnosticRun for overall run timing
+- Database schema migration for collection_time_ms column
+- API responses include collection_time_ms
+- WMI query consolidation: reliability 3→1, driver_consistency 2→1
+- Network adapter status switched from PowerShell to psutil (zero overhead)
+- 25 new regression tests for all Phase 10B categories
+- 766 total backend tests, 13 frontend tests
+- Observed ~15s total diagnostic runtime on HP Pavilion 15-ab023tx
+
+**Design decisions**:
+- Diagnostics remain on-demand (not auto-run by dashboard/report/history/AI)
+- Event log collection bounded to prevent raw event flood
+- DNS resolution test may generate DNS traffic (noted in limitations)
+- Unavailable data treated as normal on older hardware
+- Driver age is an observation, not proof of faulty/outdated driver
+- Boot/startup terminology used (actual boot duration not available)
 
 ---
 
@@ -134,6 +167,6 @@ The following features are **not implemented** and represent potential developme
 
 No arbitrary dates or version numbers are committed to in advance. Development proceeds through milestones based on user needs and technical readiness.
 
-Current version: **v0.11.0-alpha**
+Current version: **v0.12.0-alpha**
 
 Next version will be determined when sufficient new functionality warrants a release.
