@@ -4,6 +4,65 @@ All notable changes to Old Computer Manager will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [v0.15.0-alpha] - 2026-09-20
+
+### Phase 11C + 11D — Explicit Human Confirmation + Controlled Execution
+
+This release completes the remediation intelligence pipeline with explicit human confirmation (11C) and controlled execution (11D). The system can now perform real file operations through the full Candidate → Preview → Confirmation → Execution → Audit → Rollback chain.
+
+#### Phase 11C — Explicit Human Confirmation
+- `app/remediation/confirmation_service.py`: ConfirmationService bridges Preview → Confirmation → Executor
+- Preview must exist, be READY, and match the candidate
+- Candidate must be AVAILABLE (not proposed/blocked/insufficient_evidence/stale)
+- Confirmation is bound to a specific preview fingerprint
+- Token is single-use, consumed atomically
+- No `--yes`/`--force` bypass
+- Confirmation alone does not bypass executor validation
+
+#### Phase 11D — Controlled Execution
+- `app/remediation/controlled_execution.py`: ControlledExecutionService with 14 authorization conditions
+- Production action allowlist: `user_temp_quarantine`, `disk.cleanup_temp` only
+- TOCTOU revalidation immediately before file mutation
+- Atomic confirmation consumption prevents double execution
+- Full audit trail with execution lifecycle
+- Rollback available for temp quarantine actions
+
+#### Authorization Conditions (all 14 must pass)
+1. Registered action in catalog
+2. implementation_status = implemented
+3. Production action (allowlist)
+4. eligibility = eligible
+5. Candidate status = AVAILABLE
+6. Preview status = READY
+7. Preview matches candidate
+8. Preview is fresh
+9. Explicit confirmation exists
+10. Confirmation token is valid
+11. Confirmation token is unconsumed
+12. Action version matches across components
+13. Parameters match confirmed candidate
+14. Executor validation passes
+
+#### API
+- `POST /api/v1/remediation/candidates/{candidate_id}/execute`: Execute a confirmed candidate
+
+#### CLI
+- `ocm actions confirm-candidate <candidate_id> [--json]`: Confirm a candidate
+- `ocm actions execute-candidate <candidate_id> [--json]`: Execute a confirmed candidate
+
+#### Security
+- No subprocess/shell/os.system in confirmation or execution layers
+- No arbitrary paths, commands, or executables
+- No `--yes`/`--force`/`--skip-confirmation` bypass
+- AI cannot create confirmation tokens or execute actions
+- Confirmation alone does not bypass executor validation
+- Atomic confirmation consumption prevents double execution
+
+#### Tests
+- 82 new tests (45 confirmation + 37 controlled execution) covering authorization, double execution, TOCTOU, security
+- 955 backend tests passing (873 existing + 82 new), 9 skipped
+- 13 frontend tests passing
+
 ## [v0.14.0-alpha] - 2026-09-20
 
 ### Phase 11B — Candidate Preview Intelligence

@@ -109,26 +109,6 @@ This document tracks completed milestones and potential future directions for Ol
 - Preview does not automatically scan filesystems
 - Preview does not refresh stale evidence
 
-**Status**: 2026-09-20 (release freeze)
-
-**Capabilities**:
-- ActionCandidate model with deterministic status (available/proposed/blocked/insufficient_evidence/stale)
-- Evidence binding via EvidenceSource (source_type, source_id, observation, value)
-- PolicyEngine: evaluate_candidates() evaluates diagnostic data against action catalog
-- Rule A: disk.cleanup_temp — triggers on storage pressure (>80%) + eligible temp files
-- Rule B: user_temp_quarantine — triggers on eligible temp file evidence
-- Blocked actions: startup.disable_entry, service.stop_temporary, service.disable_unused, software.uninstall, network.proxy_configure, power.plan_optimize
-- Proposed actions: disk.cleanup_logs, browser.cache_clear, update.check_only
-- `executable` property always returns `False` — no execution authority
-- MAX_ACTION_CANDIDATES=20, MAX_EVIDENCE_ITEMS=10
-- GET /api/v1/remediation/candidates (with status/action_id filters)
-- GET /api/v1/remediation/candidates/{candidate_id}
-- CLI: `actions candidates [--json] [--status X] [--action X]`
-- AI prompt v1.3 with candidate rules (25-35)
-- ActionCandidateSummary in HealthReport
-- 62 new tests, 828 total backend tests
-- Security audit: no executor/subprocess/shell in candidates.py or policy.py
-
 **Design decisions**:
 - Candidate layer MUST NOT import executor module
 - Policy engine decides availability, not AI
@@ -136,6 +116,37 @@ This document tracks completed milestones and potential future directions for Ol
 - Blocked actions must NEVER become available candidates
 - Historical evidence alone cannot create immediate cleanup targets
 - No automatic diagnostics or filesystem scans triggered by candidate requests
+
+---
+
+### v0.15.0-alpha — Controlled Execution Pipeline ✓
+
+**Status**: 2026-09-20 (release freeze)
+
+**Capabilities**:
+- ConfirmationService: bridges Preview → Confirmation → Executor
+- Explicit human confirmation required for all implemented actions
+- Confirmation bound to specific preview fingerprint
+- Single-use confirmation tokens, consumed atomically
+- ControlledExecutionService: 14 authorization conditions validated
+- Production action allowlist: user_temp_quarantine, disk.cleanup_temp only
+- TOCTOU revalidation immediately before file mutation
+- Atomic confirmation consumption prevents double execution
+- Full audit trail with execution lifecycle
+- Rollback available for temp quarantine actions
+- API: POST /api/v1/remediation/candidates/{candidate_id}/execute
+- CLI: actions confirm-candidate, actions execute-candidate
+- 82 new tests (confirmation + controlled execution), 955 total backend tests
+- Security audit: no bypass flags, no subprocess/shell, atomic consumption
+
+**Design decisions**:
+- Confirmation layer MUST NOT import executor
+- Controlled execution layer MUST NOT import AI modules, subprocess, shell
+- No --yes/--force/--skip-confirmation bypass anywhere
+- No arbitrary paths, commands, executables in confirmation or execution
+- AI cannot create confirmation tokens or execute actions
+- Confirmation alone does not bypass executor validation
+- All 14 authorization conditions must pass before execution
 
 ---
 
@@ -248,6 +259,6 @@ The following features are **not implemented** and represent potential developme
 
 No arbitrary dates or version numbers are committed to in advance. Development proceeds through milestones based on user needs and technical readiness.
 
-Current version: **v0.14.0-alpha**
+Current version: **v0.15.0-alpha**
 
 Next version will be determined when sufficient new functionality warrants a release.

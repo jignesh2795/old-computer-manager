@@ -1,53 +1,108 @@
-# Release Notes: v0.6.0-alpha
+# Release Notes: v0.15.0-alpha
 
-**AI Advisory Layer**
+**Controlled Execution Pipeline — First Real System Changes**
 
-Released: 2026-09-16
+Released: 2026-09-20
 
 ## Summary
 
-Old Computer Manager v0.6.0-alpha adds a local-first AI advisory layer with strict safety boundaries. The AI can analyze system state and provide observations/recommendations but has no executor access, no confirmation-token access, and no system modification authority.
+Old Computer Manager v0.15.0-alpha completes the remediation intelligence pipeline (Phases 11A-11D). This release adds explicit human confirmation (11C) and controlled execution (11D), enabling the first real system changes through the full Candidate → Preview → Confirmation → Execution → Audit → Rollback chain.
+
+**This is the first release where the system can perform real file operations.** All actions require explicit human confirmation and pass 14 authorization conditions before execution.
 
 ## Major Capabilities
 
-### Intelligence Gathering
-- 11 read-only collectors (hardware, OS, storage, software, startup, services, tasks, processes, battery)
-- SQLite knowledge base with discovery history
-- 6 analysis engines with configurable thresholds
-- File intelligence: large files, duplicates, type analysis
+### Diagnostic-to-Action Intelligence (Phases 11A-11B)
+- ActionCandidate model with deterministic status (available/proposed/blocked/insufficient_evidence/stale)
+- PolicyEngine evaluates diagnostic data against action catalog
+- Candidate Preview explains exactly what WOULD happen before execution
+- Preview is frozen, informational only, never an authorization token
 
-### Safe Remediation
-- User temp quarantine with rollback (files never permanently deleted)
-- Preview before execution
-- Cryptographically bound confirmation tokens
-- Full audit trail
+### Explicit Human Confirmation (Phase 11C)
+- ConfirmationService bridges Preview → Confirmation → Executor
+- Preview must exist, be READY, and match the candidate
+- Candidate must be AVAILABLE (not proposed/blocked/insufficient_evidence/stale)
+- Confirmation is bound to a specific preview fingerprint
+- Token is single-use, consumed atomically
+- No `--yes`/`--force` bypass anywhere
 
-### AI Advisory (NEW)
-- Read-only advisory generation from system state
-- Deterministic mock provider (no API quotas consumed)
-- Context builder with explicit budget limits
-- Safety validator detecting prohibited content
-- Structured output: observations, recommendations, uncertainties, limitations
-- CLI `ai` command with human-readable and JSON output
-- FastAPI `GET /api/v1/ai/advisory` endpoint
+### Controlled Execution (Phase 11D)
+- 14 authorization conditions validated before execution
+- Production action allowlist: `user_temp_quarantine`, `disk.cleanup_temp` only
+- TOCTOU revalidation immediately before file mutation
+- Atomic confirmation consumption prevents double execution
+- Full audit trail with execution lifecycle
+- Rollback available for temp quarantine actions
 
-### Unified Reporting
-- Human-readable health report
-- Deterministic JSON export
-- Analysis status tracking
+## Safety Architecture
 
-### Local API
-- 9 read-only GET endpoints
-- localhost-only binding
-- Interactive Swagger/ReDoc documentation
+```
+Evidence → ActionCandidate → Preview → Confirmation → Execution → Audit → Rollback
+```
+
+### Authorization Conditions (all 14 must pass)
+1. Registered action in catalog
+2. implementation_status = implemented
+3. Production action (allowlist)
+4. eligibility = eligible
+5. Candidate status = AVAILABLE
+6. Preview status = READY
+7. Preview matches candidate
+8. Preview is fresh
+9. Explicit confirmation exists
+10. Confirmation token is valid
+11. Confirmation token is unconsumed
+12. Action version matches across components
+13. Parameters match confirmed candidate
+14. Executor validation passes
+
+### Security Constraints
+- Only production actions may execute
+- No subprocess/shell/os.system in confirmation or execution layers
+- No arbitrary paths, commands, or executables
+- No `--yes`/`--force`/`--skip-confirmation` bypass
+- AI cannot create confirmation tokens or execute actions
+- Confirmation alone does not bypass executor validation
 
 ## Test Results
 
 ```
-451 passed
-3 skipped
+955 passed
+9 skipped
 0 failures
 ```
+
+### Security Test Coverage
+- Production action allowlist verification
+- Double execution prevention (atomic consumption)
+- TOCTOU revalidation (file existence, path containment, symlink detection)
+- No arbitrary parameter injection
+- CLI has no bypass flags
+- Confirmation consumes atomically
+- Preview is informational only
+
+## Usage
+
+```bash
+# List action candidates
+old-computer-manager actions candidates
+
+# Preview a candidate
+old-computer-manager actions preview-candidate <candidate_id>
+
+# Confirm a candidate
+old-computer-manager actions confirm-candidate <candidate_id>
+
+# Execute a confirmed candidate
+old-computer-manager actions execute-candidate <candidate_id>
+```
+
+## Known Limitations
+
+- Only 2 production actions: `user_temp_quarantine` and `disk.cleanup_temp`
+- Confirmation store is in-memory (not yet SQLite-backed)
+- No rollback UI in dashboard
+- Windows-only platform support
 
 ## Safety Posture
 
@@ -55,56 +110,7 @@ Old Computer Manager v0.6.0-alpha adds a local-first AI advisory layer with stri
 - No remote access
 - No arbitrary shell execution
 - No AI execution path
-- Registry/services/tasks not modified
-- Permanent deletion not used
-- Battery serial numbers never stored
-- AI has no executor access
-- AI has no confirmation-token access
-- AI has no rollback access
-- AI output validated for prohibited content
-- External AI provider disabled by default
-
-## Known Limitations
-
-- Battery observation is non-baseline (hardware being replaced)
-- Windows-only platform support
-- No real-time monitoring
-- No web UI
-- No historical trend visualization
-- AI advisory uses mock provider (no real LLM integration)
-
-## Installation
-
-```bash
-pip install -e .
-```
-
-## Quick Start
-
-```bash
-# Run discovery
-old-computer-manager discover
-
-# Analyze results
-old-computer-manager analyze
-
-# Generate report
-old-computer-manager report
-
-# Get AI advisory
-old-computer-manager ai
-
-# Start API
-old-computer-manager serve
-```
-
-## Documentation
-
-- [README](README.md) — Full documentation
-- [CHANGELOG](CHANGELOG.md) — Version history
-- [ROADMAP](ROADMAP.md) — Future directions
-- [SECURITY](SECURITY.md) — Safety model
-
-## License
-
-Personal use and local computer management.
+- All actions require explicit human confirmation
+- 14 authorization conditions enforced
+- Full audit trail
+- Rollback available for file operations
