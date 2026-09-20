@@ -734,8 +734,8 @@ class TestExistingTestsUnaffected:
         assert advisory.summary
 
     def test_prompt_version_is_1_2(self):
-        """R. Prompt version is 1.2 (updated in Phase 9A)."""
-        assert AI_PROMPT_VERSION == "1.2"
+        """R. Prompt version is 1.3 (updated in Phase 11A)."""
+        assert AI_PROMPT_VERSION == "1.3"
 
     def test_system_prompt_contains_historical_rules(self):
         """R. System prompt contains historical reasoning rules."""

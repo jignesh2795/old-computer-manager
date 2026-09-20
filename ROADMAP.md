@@ -58,6 +58,38 @@ This document tracks completed milestones and potential future directions for Ol
 
 ---
 
+### v0.13.0-alpha — Diagnostic-to-Action Intelligence ✓
+
+**Status**: 2026-09-20 (release freeze)
+
+**Capabilities**:
+- ActionCandidate model with deterministic status (available/proposed/blocked/insufficient_evidence/stale)
+- Evidence binding via EvidenceSource (source_type, source_id, observation, value)
+- PolicyEngine: evaluate_candidates() evaluates diagnostic data against action catalog
+- Rule A: disk.cleanup_temp — triggers on storage pressure (>80%) + eligible temp files
+- Rule B: user_temp_quarantine — triggers on eligible temp file evidence
+- Blocked actions: startup.disable_entry, service.stop_temporary, service.disable_unused, software.uninstall, network.proxy_configure, power.plan_optimize
+- Proposed actions: disk.cleanup_logs, browser.cache_clear, update.check_only
+- `executable` property always returns `False` — no execution authority
+- MAX_ACTION_CANDIDATES=20, MAX_EVIDENCE_ITEMS=10
+- GET /api/v1/remediation/candidates (with status/action_id filters)
+- GET /api/v1/remediation/candidates/{candidate_id}
+- CLI: `actions candidates [--json] [--status X] [--action X]`
+- AI prompt v1.3 with candidate rules (25-35)
+- ActionCandidateSummary in HealthReport
+- 62 new tests, 828 total backend tests
+- Security audit: no executor/subprocess/shell in candidates.py or policy.py
+
+**Design decisions**:
+- Candidate layer MUST NOT import executor module
+- Policy engine decides availability, not AI
+- AI cannot promote proposed/blocked/insufficient_evidence/stale → available
+- Blocked actions must NEVER become available candidates
+- Historical evidence alone cannot create immediate cleanup targets
+- No automatic diagnostics or filesystem scans triggered by candidate requests
+
+---
+
 ### v0.9.0-alpha — Historical AI Reasoning ✓
 
 **Status**: Released 2026-09-16
@@ -167,6 +199,6 @@ The following features are **not implemented** and represent potential developme
 
 No arbitrary dates or version numbers are committed to in advance. Development proceeds through milestones based on user needs and technical readiness.
 
-Current version: **v0.12.0-alpha**
+Current version: **v0.13.0-alpha**
 
 Next version will be determined when sufficient new functionality warrants a release.

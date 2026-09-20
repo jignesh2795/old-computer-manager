@@ -92,6 +92,27 @@ The API does not trigger discovery or analysis:
 - No background processes are started
 - No system state changes occur
 
+## Action Candidate Safety (Phase 11A)
+
+The action candidate system (`app/remediation/candidates.py` and `app/remediation/policy.py`) is read-only by design:
+
+### What Candidates Cannot Do
+
+- **No execution authority**: `ActionCandidate.executable` always returns `False`
+- **No executor import**: Policy engine has no import of the executor module
+- **No subprocess/shell**: No `subprocess`, `shell=True`, or `os.system` in candidates.py or policy.py
+- **No AI status changes**: AI cannot promote proposed/blocked/insufficient_evidence/stale → available
+- **No automatic actions**: Candidates do not trigger execution, cleanup, or modifications
+- **No file system access**: Policy engine evaluates data without filesystem mutations
+
+### What Candidates Do
+
+- **Evidence-based**: Candidates are generated from discovery data, diagnostics, and file analysis
+- **Deterministic**: Same inputs always produce the same candidates
+- **Bounded**: MAX_ACTION_CANDIDATES=20, MAX_EVIDENCE_ITEMS=10
+- **Freshness-limited**: Candidates have `stale_after` timestamps
+- **Blocked actions**: High-risk actions (startup.disable_entry, service.*, software.uninstall, network.*, power.*) are always blocked
+
 ## AI Safety Boundary
 
 The AI advisory layer (`app/ai/`) is strictly read-only and has no access to system modification capabilities.

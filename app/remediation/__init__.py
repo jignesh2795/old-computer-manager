@@ -62,3 +62,17 @@ from app.remediation.cleanup_temp import (
     MAX_AGE_DAYS,
     MAX_FILES_PER_EXECUTION,
 )
+# Candidate generation (no execution authority)
+from app.remediation.candidates import (
+    ActionCandidate,
+    CandidateStatus,
+    CandidatesSummary,
+    EvidenceSource,
+    EvidenceSourceType,
+)
+from app.remediation.policy import (
+    PolicyContext,
+    evaluate_candidates,
+    MAX_ACTION_CANDIDATES,
+    MAX_EVIDENCE_ITEMS,
+)

@@ -123,6 +123,32 @@ class RemediationActionsResponse(BaseModel):
     count: int
 
 
+class ActionCandidateResponse(BaseModel):
+    candidate_id: str
+    action_id: str
+    status: str
+    title: str
+    reason: str
+    risk_level: str = ""
+    reversible: bool = False
+    requires_admin: bool = False
+    executable: bool = False
+    preview_available: bool = False
+    rollback_available: bool = False
+    limitations: list[str] = []
+    evidence: list[dict[str, Any]] = []
+
+
+class ActionCandidatesResponse(BaseModel):
+    candidates: list[ActionCandidateResponse]
+    available_count: int = 0
+    proposed_count: int = 0
+    blocked_count: int = 0
+    insufficient_evidence_count: int = 0
+    stale_count: int = 0
+    total_count: int = 0
+
+
 class DiagnosticResultResponse(BaseModel):
     diagnostic_id: str
     category: str
@@ -207,7 +233,7 @@ class LimitationResponse(BaseModel):
 class AdvisoryMetadataResponse(BaseModel):
     provider: str = ""
     model: str = ""
-    prompt_version: str = "1.2"
+    prompt_version: str = "1.3"
     generated_at: str = ""
 
 

@@ -8,6 +8,7 @@ from typing import Any
 from app.analyzers.constants import STORAGE_CRITICAL_THRESHOLD, STORAGE_WARNING_THRESHOLD
 from app.database.sqlite import SnapshotStore
 from app.reporting.models import (
+    ActionCandidateSummary,
     BatterySummary,
     DiagnosticsSummary,
     FindingSummary,
@@ -251,6 +252,75 @@ def _build_remediation_summary() -> RemediationSummary:
     return RemediationSummary(actions=actions)
 
 
+def _build_action_candidates_summary(
+    storage: StorageSummary,
+    file_analysis: FileAnalysisSummary,
+    findings: FindingsGrouped,
+    discovery_run_id: int | None,
+) -> ActionCandidateSummary:
+    """Build action candidates from current report data using the policy engine."""
+    from app.remediation.candidates import CandidateStatus
+    from app.remediation.policy import PolicyContext, evaluate_candidates
+
+    # Build policy context from current report data
+    storage_dict = {
+        "partitions": [
+            {
+                "device": p.device or "",
+                "usage_percent": p.usage_percent or 0,
+            }
+            for p in storage.partitions
+        ]
+    }
+
+    file_analysis_dict: dict[str, Any] = {}
+    if file_analysis.available:
+        file_analysis_dict = {
+            "scan_source": file_analysis.scan_root or "unknown",
+            "eligible_temp_files": [],  # Populated from file scan if available
+        }
+
+    findings_list = []
+    for f in findings.critical + findings.warning:
+        findings_list.append({
+            "id": f.finding_id,
+            "severity": f.severity,
+            "title": f.title,
+        })
+
+    ctx = PolicyContext(
+        discovery_run_id=discovery_run_id,
+        storage_summary=storage_dict,
+        file_analysis=file_analysis_dict if file_analysis_dict else None,
+        findings=findings_list if findings_list else None,
+    )
+
+    result = evaluate_candidates(ctx)
+
+    return ActionCandidateSummary(
+        available_count=result.available_count,
+        proposed_count=result.proposed_count,
+        blocked_count=result.blocked_count,
+        insufficient_evidence_count=result.insufficient_evidence_count,
+        stale_count=result.stale_count,
+        total_count=result.total_count,
+        candidates=[
+            {
+                "candidate_id": c.candidate_id,
+                "action_id": c.action_id,
+                "status": c.status.value,
+                "title": c.title,
+                "reason": c.reason,
+                "risk_level": c.risk_level,
+                "reversible": c.reversible,
+                "executable": c.executable,
+                "limitations": c.limitations,
+            }
+            for c in result.candidates
+        ],
+    )
+
+
 def build_health_report(store: SnapshotStore | None = None) -> HealthReport:
     """Build a unified health report from the latest completed discovery run."""
     if store is None:
@@ -314,6 +384,9 @@ def build_health_report(store: SnapshotStore | None = None) -> HealthReport:
     file_analysis = _build_file_analysis_summary(store)
     remediation = _build_remediation_summary()
     diagnostics = _build_diagnostics_summary(store)
+    action_candidates = _build_action_candidates_summary(
+        storage, file_analysis, findings, run_id,
+    )
 
     return HealthReport(
         schema_version=SCHEMA_VERSION,
@@ -334,6 +407,7 @@ def build_health_report(store: SnapshotStore | None = None) -> HealthReport:
         scheduled_tasks=ScheduledTaskSummary(count=task_count),
         file_analysis=file_analysis,
         remediation=remediation,
+        action_candidates=action_candidates,
         diagnostics=diagnostics,
         errors=errors,
     )

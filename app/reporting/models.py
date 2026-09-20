@@ -150,6 +150,18 @@ class RemediationSummary:
 
 
 @dataclass(frozen=True)
+class ActionCandidateSummary:
+    """Bounded summary of action candidates for the health report."""
+    available_count: int = 0
+    proposed_count: int = 0
+    blocked_count: int = 0
+    insufficient_evidence_count: int = 0
+    stale_count: int = 0
+    total_count: int = 0
+    candidates: list[dict[str, Any]] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
 class DiagnosticsSummary:
     available: bool = False
     run_id: int | None = None
@@ -188,5 +200,6 @@ class HealthReport:
     scheduled_tasks: ScheduledTaskSummary = field(default_factory=ScheduledTaskSummary)
     file_analysis: FileAnalysisSummary = field(default_factory=FileAnalysisSummary)
     remediation: RemediationSummary = field(default_factory=RemediationSummary)
+    action_candidates: ActionCandidateSummary = field(default_factory=ActionCandidateSummary)
     diagnostics: DiagnosticsSummary = field(default_factory=DiagnosticsSummary)
     errors: list[ReportError] = field(default_factory=list)

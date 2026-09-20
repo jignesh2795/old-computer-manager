@@ -18,7 +18,7 @@ def cmd_discover(args: argparse.Namespace) -> int:
     """Run a full discovery scan."""
     from app.discovery import run
 
-    print("Old Computer Manager v0.12.0-alpha")
+    print("Old Computer Manager v0.13.0-alpha")
     print("Read-only discovery mode")
     print(f"Platform: {platform.platform()}")
     print(f"Python: {sys.version.split()[0]}")
@@ -39,7 +39,7 @@ def cmd_analyze(args: argparse.Namespace) -> int:
     """Analyze the latest completed discovery run."""
     from app.analyzers.runner import analyze_latest_run
 
-    print("Old Computer Manager v0.12.0-alpha")
+    print("Old Computer Manager v0.13.0-alpha")
     print("Read-only analysis mode\n")
 
     store = SnapshotStore()
@@ -63,7 +63,7 @@ def cmd_actions(args: argparse.Namespace) -> int:
     """List registered remediation actions."""
     from app.remediation.registry import create_default_registry
 
-    print("Old Computer Manager v0.12.0-alpha")
+    print("Old Computer Manager v0.13.0-alpha")
     print("Remediation actions\n")
 
     registry = create_default_registry()
@@ -95,7 +95,7 @@ def cmd_actions_preview(args: argparse.Namespace) -> int:
     from app.remediation.preview import preview_action
     import json as json_mod
 
-    print("Old Computer Manager v0.12.0-alpha")
+    print("Old Computer Manager v0.13.0-alpha")
     print(f"Action preview: {args.action_id}\n")
 
     registry = create_default_registry()
@@ -181,7 +181,7 @@ def cmd_actions_execute(args: argparse.Namespace) -> int:
     from app.remediation.audit import AuditStore
     import json as json_mod
 
-    print("Old Computer Manager v0.12.0-alpha")
+    print("Old Computer Manager v0.13.0-alpha")
     print(f"Execute action: {args.action_id}\n")
 
     registry = create_default_registry()
@@ -262,7 +262,7 @@ def cmd_actions_rollback(args: argparse.Namespace) -> int:
     from app.remediation.audit import AuditStore, AuditStatus
     from app.database.sqlite import SnapshotStore
 
-    print("Old Computer Manager v0.12.0-alpha")
+    print("Old Computer Manager v0.13.0-alpha")
     print(f"Rollback quarantine record: {args.record_id}\n")
 
     db_path = Path("data/computer.db")
@@ -305,12 +305,79 @@ def cmd_actions_rollback(args: argparse.Namespace) -> int:
     return 0 if success else 1
 
 
+def cmd_actions_candidates(args: argparse.Namespace) -> int:
+    """Show action candidates from the deterministic policy engine."""
+    import json as json_mod
+    from app.reporting.builder import build_health_report
+
+    print("Old Computer Manager v0.13.0-alpha")
+    print("Action Candidates (read-only, no execution)\n")
+
+    report = build_health_report()
+    ac = report.action_candidates
+
+    # Apply filters
+    candidates = ac.candidates
+    if args.status:
+        candidates = [c for c in candidates if c.get("status") == args.status]
+    if args.action:
+        candidates = [c for c in candidates if c.get("action_id") == args.action]
+
+    if args.json_output:
+        output = {
+            "available_count": ac.available_count,
+            "proposed_count": ac.proposed_count,
+            "blocked_count": ac.blocked_count,
+            "insufficient_evidence_count": ac.insufficient_evidence_count,
+            "stale_count": ac.stale_count,
+            "total_count": len(candidates),
+            "candidates": candidates,
+        }
+        print(json_mod.dumps(output, indent=2, default=str))
+        return 0
+
+    # Summary
+    print(f"Available: {ac.available_count}  |  "
+          f"Proposed: {ac.proposed_count}  |  "
+          f"Blocked: {ac.blocked_count}  |  "
+          f"Insufficient evidence: {ac.insufficient_evidence_count}  |  "
+          f"Stale: {ac.stale_count}")
+    print(f"Total candidates: {len(candidates)}\n")
+
+    if not candidates:
+        print("No candidates found.")
+        return 0
+
+    for c in candidates:
+        status = c.get("status", "unknown")
+        marker = {
+            "available": "[AVAILABLE]",
+            "proposed": "[PROPOSED]",
+            "blocked": "[BLOCKED]",
+            "insufficient_evidence": "[INSUFFICIENT]",
+            "stale": "[STALE]",
+        }.get(status, f"[{status.upper()}]")
+
+        print(f"  {marker} {c.get('action_id', '?')}")
+        print(f"    Title:  {c.get('title', '?')}")
+        print(f"    Reason: {c.get('reason', '?')}")
+        print(f"    Risk:   {c.get('risk_level', '?')}  |  "
+              f"Reversible: {c.get('reversible', False)}  |  "
+              f"Executable: {c.get('executable', False)}")
+        limitations = c.get("limitations", [])
+        if limitations:
+            print(f"    Note:   {'; '.join(limitations)}")
+        print()
+
+    return 0
+
+
 def cmd_files_scan(args: argparse.Namespace) -> int:
     """Scan a directory and run file analysis."""
     from app.file_analysis.runner import run_file_analysis
     from app.database.sqlite import SnapshotStore
 
-    print("Old Computer Manager v0.12.0-alpha")
+    print("Old Computer Manager v0.13.0-alpha")
     print(f"File scan: {args.path}\n")
 
     try:
@@ -418,7 +485,7 @@ def cmd_files_large(args: argparse.Namespace) -> int:
     from app.file_analysis.runner import run_file_analysis
     from app.database.sqlite import SnapshotStore
 
-    print("Old Computer Manager v0.12.0-alpha")
+    print("Old Computer Manager v0.13.0-alpha")
     print("Large file analysis\n")
 
     # Use provided path or latest scan
@@ -468,7 +535,7 @@ def cmd_files_types(args: argparse.Namespace) -> int:
     from app.file_analysis.runner import run_file_analysis
     from app.database.sqlite import SnapshotStore
 
-    print("Old Computer Manager v0.12.0-alpha")
+    print("Old Computer Manager v0.13.0-alpha")
     print("File type analysis\n")
 
     if args.path:
@@ -507,7 +574,7 @@ def cmd_files_duplicates(args: argparse.Namespace) -> int:
     from app.file_analysis.runner import run_file_analysis
     from app.database.sqlite import SnapshotStore
 
-    print("Old Computer Manager v0.12.0-alpha")
+    print("Old Computer Manager v0.13.0-alpha")
     print("Duplicate file analysis\n")
 
     if args.path:
@@ -572,7 +639,7 @@ def cmd_report(args: argparse.Namespace) -> int:
     from app.reporting.runner import generate_report, generate_json, generate_human
     from app.database.sqlite import SnapshotStore
 
-    print("Old Computer Manager v0.12.0-alpha")
+    print("Old Computer Manager v0.13.0-alpha")
     print("Generating health report...\n")
 
     store = SnapshotStore()
@@ -590,7 +657,7 @@ def cmd_serve(args: argparse.Namespace) -> int:
     """Start the local read-only API server."""
     import uvicorn
 
-    print("Old Computer Manager v0.12.0-alpha")
+    print("Old Computer Manager v0.13.0-alpha")
     print(f"Starting API server on {args.host}:{args.port}")
     print("This server is intended for localhost use only.")
     print("Press Ctrl+C to stop.\n")
@@ -608,7 +675,7 @@ def cmd_ai(args: argparse.Namespace) -> int:
     """Generate AI advisory from the latest completed report."""
     from app.ai.runner import run_advisory, run_advisory_json, AdvisoryRunnerError
 
-    print("Old Computer Manager v0.12.0-alpha")
+    print("Old Computer Manager v0.13.0-alpha")
     print("AI Advisory (local-first, read-only)\n")
 
     try:
@@ -698,7 +765,7 @@ def cmd_history(args: argparse.Namespace) -> int:
     """Display historical trend analysis."""
     from app.history.runner import run_history, run_history_json
 
-    print("Old Computer Manager v0.12.0-alpha")
+    print("Old Computer Manager v0.13.0-alpha")
     print("Historical Trend Analysis (read-only)\n")
 
     store = SnapshotStore()
@@ -799,7 +866,7 @@ def cmd_diagnostics(args: argparse.Namespace) -> int:
     """Run read-only advanced diagnostics."""
     from app.diagnostics.runner import run_diagnostics, save_diagnostic_run
 
-    print("Old Computer Manager v0.12.0-alpha")
+    print("Old Computer Manager v0.13.0-alpha")
     print("Advanced Diagnostics (read-only)\n")
 
     category = getattr(args, "diagnostics_category", None)
@@ -1014,6 +1081,23 @@ def main() -> int:
         help="Overwrite existing file at original path"
     )
 
+    # actions candidates
+    candidates_parser = actions_sub.add_parser(
+        "candidates", help="Show action candidates from policy engine"
+    )
+    candidates_parser.add_argument(
+        "--json", action="store_true", dest="json_output",
+        help="Output as JSON"
+    )
+    candidates_parser.add_argument(
+        "--status", type=str, default=None,
+        help="Filter by candidate status (available, proposed, blocked, etc.)"
+    )
+    candidates_parser.add_argument(
+        "--action", type=str, default=None,
+        help="Filter by action ID"
+    )
+
     # diagnostics subcommand
     diag_parser = sub.add_parser("diagnostics", help="Run read-only advanced diagnostics")
     diag_parser.add_argument(
@@ -1058,6 +1142,8 @@ def main() -> int:
             return cmd_actions_execute(args)
         if args.actions_command == "rollback":
             return cmd_actions_rollback(args)
+        if args.actions_command == "candidates":
+            return cmd_actions_candidates(args)
         return cmd_actions(args)
     # Default: discover
     return cmd_discover(args)

@@ -4,6 +4,45 @@ All notable changes to Old Computer Manager will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [v0.13.0-alpha] - 2026-09-20
+
+### Phase 11A — Action Candidate System (Diagnostic-to-Action Intelligence)
+
+This phase introduces the ActionCandidate model and PolicyEngine that evaluates diagnostic data against the action catalog to produce deterministic, evidence-based action candidates. The system is strictly read-only — `executable` is always `False`, and no execution authority is granted by the candidate subsystem.
+
+#### New Modules
+- `app/remediation/candidates.py`: ActionCandidate, CandidateStatus, EvidenceSource, EvidenceSourceType, CandidatesSummary models
+- `app/remediation/policy.py`: Policy engine with PolicyContext, evaluate_candidates(), Rule A (disk.cleanup_temp), Rule B (user_temp_quarantine), blocked/proposed candidate builders, MAX_ACTION_CANDIDATES=20, MAX_EVIDENCE_ITEMS=10
+
+#### API
+- `GET /api/v1/remediation/candidates`: List action candidates with optional `?status=` and `?action_id=` filters
+- `GET /api/v1/remediation/candidates/{candidate_id}`: Get candidate detail by ID
+
+#### CLI
+- `ocm actions candidates [--json] [--status X] [--action X]`: List action candidates
+
+#### AI Integration
+- AI prompt v1.3 with 11 new candidate rules (25-35)
+- `action_candidates_summary` field on AIContext for AI visibility
+- AI cannot promote or demote candidate status
+
+#### Reporting
+- ActionCandidateSummary in HealthReport
+- action_candidates field in report output
+
+#### Constraints
+- `executable` property always returns `False`
+- Policy engine has no import of executor module
+- No subprocess or shell=True in candidates.py or policy.py
+- Historical evidence alone cannot create immediate cleanup targets
+- Blocked actions never become available candidates
+
+#### Tests
+- 62 new Phase 11A tests covering models, policy engine, API, CLI, security, integration
+- 828 backend tests passing (766 existing + 62 new), 8 skipped
+- 13 frontend tests passing
+- Security audit: no executor/subprocess/shell imports in candidates.py or policy.py
+
 ## [v0.12.0-alpha] - 2026-09-20
 
 ### Phase 10B + 10B.1 — Useful Diagnostics Expansion + Quality Hardening

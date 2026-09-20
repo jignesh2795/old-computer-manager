@@ -212,7 +212,7 @@ class MockProvider(AIProvider):
             metadata=AdvisoryMetadata(
                 provider="mock",
                 model="deterministic",
-                prompt_version="1.2",
+                prompt_version="1.3",
                 generated_at=datetime.now().isoformat(),
             ),
             historical_summary=historical_summary,

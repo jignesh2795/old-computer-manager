@@ -4,7 +4,7 @@ A local-first, read-only computer intelligence system for understanding, diagnos
 
 ## Version
 
-**v0.12.0-alpha** — Useful Diagnostics Expansion
+**v0.13.0-alpha** — Diagnostic-to-Action Intelligence
 
 ## Purpose
 
@@ -36,12 +36,13 @@ Collectors -> SQLite Knowledge Base -> Analyzers -> Reports/API -> (Future: AI/U
 |-------|-------------|
 | **Collectors** | 11 read-only data collectors (hardware, OS, storage, software, startup, services, tasks, processes, battery, Windows-specific) |
 | **Analyzers** | 6 analysis engines (storage, startup, process, service, task, battery) that evaluate collected data against thresholds |
-| **Diagnostics** | 5 read-only diagnostic modules (disk health, thermal, performance, devices, Windows health) with per-module isolation |
+| **Diagnostics** | 10 read-only diagnostic modules (disk health, thermal, performance, devices, Windows health, event_log, reliability, boot_timing, network_health, driver_consistency) with per-module isolation |
 | **SQLite Database** | Persistent knowledge base storing discovery snapshots, analysis findings, diagnostic runs, file scans, quarantine records, and audit trail |
 | **File Analysis** | Directory scanner with large file detection, file type grouping, and duplicate detection |
 | **Reporting** | Unified health report builder with human-readable and deterministic JSON export |
 | **API** | Local read-only FastAPI server for programmatic access |
 | **Remediation** | Safety framework with validation, confirmation tokens, controlled execution, and rollback |
+| **Action Candidates** | Diagnostic-to-action intelligence: deterministic candidate evaluation, evidence binding, policy engine |
 | **Dashboard** | Lightweight React frontend for local visualization (read-only) |
 
 ## CLI Commands
@@ -129,12 +130,14 @@ old-computer-manager actions
 old-computer-manager actions preview <action_id>
 old-computer-manager actions execute <action_id>
 old-computer-manager actions rollback <record_id>
+old-computer-manager actions candidates [--json] [--status X] [--action X]
 ```
 
 - **actions**: List registered remediation actions
 - **preview**: Show what an action would do without executing
 - **execute**: Execute an action with validation and confirmation
 - **rollback**: Restore a quarantined file to its original location
+- **candidates**: List action candidates (read-only, no execution authority)
 
 ### Advanced Diagnostics
 
@@ -201,6 +204,8 @@ All endpoints are GET-only and read-only. The server binds to localhost only.
 | `GET /api/v1/diagnostics/performance` | Performance diagnostics |
 | `GET /api/v1/diagnostics/devices` | Device/driver diagnostics |
 | `GET /api/v1/diagnostics/windows` | Windows health diagnostics |
+| `GET /api/v1/remediation/candidates` | Action candidates (available/proposed/blocked/insufficient_evidence/stale) |
+| `GET /api/v1/remediation/candidates/{candidate_id}` | Action candidate detail |
 
 ### Interactive Documentation
 

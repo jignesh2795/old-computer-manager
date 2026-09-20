@@ -54,6 +54,7 @@ class AIContext:
     startup_summary: dict[str, Any] = field(default_factory=dict)
     process_summary: dict[str, Any] = field(default_factory=dict)
     remediation_metadata: list[dict[str, Any]] = field(default_factory=list)
+    action_candidates_summary: dict[str, Any] = field(default_factory=dict)
     historical_summary: dict[str, Any] = field(default_factory=dict)
     diagnostics_summary: dict[str, Any] = field(default_factory=dict)
     analysis_status: str | None = None
@@ -334,6 +335,45 @@ def _build_diagnostics_summary(report: HealthReport) -> dict[str, Any]:
     return result
 
 
+MAX_ACTION_CANDIDATES_AI: int = 10
+
+
+def _build_action_candidates_summary(report: HealthReport) -> dict[str, Any]:
+    """Build bounded action candidates summary for AI context.
+
+    Includes available, proposed, and blocked candidates with evidence.
+    AI must NOT change candidate status or invent candidates.
+    """
+    ac = report.action_candidates
+    if not ac or ac.total_count == 0:
+        return {"available": False}
+
+    candidates = []
+    for c in ac.candidates[:MAX_ACTION_CANDIDATES_AI]:
+        candidates.append({
+            "candidate_id": c.get("candidate_id", ""),
+            "action_id": c.get("action_id", ""),
+            "status": c.get("status", ""),
+            "title": c.get("title", ""),
+            "reason": _truncate_text(c.get("reason", ""), 300),
+            "risk_level": c.get("risk_level", ""),
+            "reversible": c.get("reversible", False),
+            "executable": c.get("executable", False),
+            "limitations": c.get("limitations", []),
+        })
+
+    return {
+        "available": True,
+        "available_count": ac.available_count,
+        "proposed_count": ac.proposed_count,
+        "blocked_count": ac.blocked_count,
+        "insufficient_evidence_count": ac.insufficient_evidence_count,
+        "stale_count": ac.stale_count,
+        "total_count": ac.total_count,
+        "candidates": candidates,
+    }
+
+
 def build_ai_context(report: HealthReport) -> AIContext:
     """Build bounded AI context from HealthReport.
 
@@ -358,6 +398,7 @@ def build_ai_context(report: HealthReport) -> AIContext:
         startup_summary=_build_startup_summary(report),
         process_summary=_build_process_summary(report),
         remediation_metadata=_build_remediation_metadata(report),
+        action_candidates_summary=_build_action_candidates_summary(report),
         historical_summary=_build_historical_summary(report),
         diagnostics_summary=_build_diagnostics_summary(report),
         analysis_status=report.analysis_status,
