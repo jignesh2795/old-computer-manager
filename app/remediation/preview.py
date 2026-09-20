@@ -132,6 +132,30 @@ class CandidatePreviewBuilder:
     Never executes actions.
     """
 
+    @staticmethod
+    def _resolve_implementation_status(action_id: str) -> tuple[str, str]:
+        """Resolve implementation_status from the action catalog.
+
+        Returns:
+            (implementation_status, implementation_status_text) tuple.
+            implementation_status is one of: implemented, proposed, blocked, not_implemented.
+        """
+        from app.remediation.catalog import get_catalog_entry
+        from app.remediation.action import ImplementationStatus
+
+        entry = get_catalog_entry(action_id)
+        if entry is None:
+            return ("not_implemented", "Action is not in the catalog.")
+
+        status_map = {
+            ImplementationStatus.IMPLEMENTED: ("implemented", "Action is implemented and eligible for execution after confirmation."),
+            ImplementationStatus.PROPOSED: ("proposed", "Action is designed but not yet implemented. No execution path exists."),
+            ImplementationStatus.BLOCKED: ("blocked", "Action is explicitly blocked. Risk or blast radius prevents execution."),
+            ImplementationStatus.NOT_IMPLEMENTED: ("not_implemented", "Action is not implemented."),
+        }
+
+        return status_map.get(entry.implementation_status, ("not_implemented", "Unknown implementation status."))
+
     def build_preview(
         self,
         candidate: Any,
@@ -187,6 +211,7 @@ class CandidatePreviewBuilder:
         file_analysis: dict[str, Any] | None,
     ) -> Preview:
         """Preview for disk.cleanup_temp action."""
+        impl_status, impl_text = self._resolve_implementation_status(candidate.action_id)
         items: list[PreviewItem] = []
         total_bytes = 0
         eligible_files: list[dict[str, Any]] = []
@@ -248,12 +273,13 @@ class CandidatePreviewBuilder:
             omitted_count=omitted,
             fingerprint=fingerprint,
             permanent_deletion=False,
-            implementation_status="implemented",
-            implementation_status_text="Action is implemented and eligible for execution after confirmation.",
+            implementation_status=impl_status,
+            implementation_status_text=impl_text,
         )
 
     def _preview_quarantine(self, candidate: Any) -> Preview:
         """Preview for user_temp_quarantine action."""
+        impl_status, impl_text = self._resolve_implementation_status(candidate.action_id)
         return Preview(
             preview_id=f"preview:{candidate.candidate_id}",
             candidate_id=candidate.candidate_id,
@@ -274,10 +300,13 @@ class CandidatePreviewBuilder:
             requires_admin=False,
             confirmation_required=True,
             freshness_status="within_window",
+            implementation_status=impl_status,
+            implementation_status_text=impl_text,
         )
 
     def _build_generic_available_preview(self, candidate: Any) -> Preview:
         """Generic preview for other available candidates."""
+        impl_status, impl_text = self._resolve_implementation_status(candidate.action_id)
         risk = candidate.risk_level if hasattr(candidate, "risk_level") else ""
         return Preview(
             preview_id=f"preview:{candidate.candidate_id}",
@@ -296,6 +325,8 @@ class CandidatePreviewBuilder:
             requires_admin=candidate.requires_admin if hasattr(candidate, "requires_admin") else False,
             confirmation_required=True,
             limitations=["Preview not fully implemented for this action"],
+            implementation_status=impl_status,
+            implementation_status_text=impl_text,
         )
 
     # ------------------------------------------------------------------
@@ -304,6 +335,7 @@ class CandidatePreviewBuilder:
 
     def _build_proposed_preview(self, candidate: Any) -> Preview:
         """Design-only preview for proposed (not implemented) actions."""
+        impl_status, impl_text = self._resolve_implementation_status(candidate.action_id)
         return Preview(
             preview_id=f"preview:{candidate.candidate_id}",
             candidate_id=candidate.candidate_id,
@@ -323,8 +355,8 @@ class CandidatePreviewBuilder:
             confirmation_required=False,
             limitations=["Action is proposed but not implemented", "No execution preview available"],
             warnings=["This action cannot be executed in the current version"],
-            implementation_status="proposed",
-            implementation_status_text="Action is designed but not yet implemented. No execution path exists.",
+            implementation_status=impl_status,
+            implementation_status_text=impl_text,
         )
 
     # ------------------------------------------------------------------
@@ -333,6 +365,7 @@ class CandidatePreviewBuilder:
 
     def _build_blocked_preview(self, candidate: Any) -> Preview:
         """Preview explaining why a blocked action cannot execute."""
+        impl_status, impl_text = self._resolve_implementation_status(candidate.action_id)
         return Preview(
             preview_id=f"preview:{candidate.candidate_id}",
             candidate_id=candidate.candidate_id,
@@ -352,8 +385,8 @@ class CandidatePreviewBuilder:
             confirmation_required=False,
             limitations=["Action is explicitly blocked", "No execution preview available"],
             warnings=["This action is blocked due to high risk or system-wide blast radius"],
-            implementation_status="blocked",
-            implementation_status_text="Action is explicitly blocked. Risk or blast radius prevents execution.",
+            implementation_status=impl_status,
+            implementation_status_text=impl_text,
         )
 
     # ------------------------------------------------------------------
@@ -362,6 +395,7 @@ class CandidatePreviewBuilder:
 
     def _build_insufficient_preview(self, candidate: Any) -> Preview:
         """Preview explaining missing evidence."""
+        impl_status, impl_text = self._resolve_implementation_status(candidate.action_id)
         return Preview(
             preview_id=f"preview:{candidate.candidate_id}",
             candidate_id=candidate.candidate_id,
@@ -381,8 +415,8 @@ class CandidatePreviewBuilder:
             confirmation_required=False,
             limitations=candidate.limitations if hasattr(candidate, "limitations") else [],
             warnings=["Missing evidence prevents preview generation"],
-            implementation_status="insufficient_evidence",
-            implementation_status_text="Action may be eligible but evidence is insufficient to identify targets.",
+            implementation_status=impl_status,
+            implementation_status_text=impl_text,
         )
 
     # ------------------------------------------------------------------
@@ -391,6 +425,7 @@ class CandidatePreviewBuilder:
 
     def _build_stale_preview(self, candidate: Any) -> Preview:
         """Preview explaining stale evidence."""
+        impl_status, impl_text = self._resolve_implementation_status(candidate.action_id)
         stale_info = ""
         if hasattr(candidate, "stale_after") and candidate.stale_after:
             stale_info = f"Evidence freshness window: {candidate.stale_after}"
@@ -414,8 +449,8 @@ class CandidatePreviewBuilder:
             confirmation_required=False,
             limitations=[stale_info, "Stale evidence cannot identify current targets"],
             warnings=["Evidence is expired. A fresh discovery is required before previewing."],
-            implementation_status="stale",
-            implementation_status_text="Evidence has expired. A fresh discovery is required.",
+            implementation_status=impl_status,
+            implementation_status_text=impl_text,
         )
 
     # ------------------------------------------------------------------

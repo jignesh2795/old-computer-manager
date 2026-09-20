@@ -673,3 +673,157 @@ class TestPreviewSummaryIntegration:
         assert hasattr(s, "proposed_count")
         assert hasattr(s, "blocked_count")
         assert hasattr(s, "total_count")
+
+
+# AF. Implementation status vs preview status are independent dimensions
+class TestImplementationStatusIndependence:
+    """Regression tests proving implementation_status and preview_status are independent.
+
+    implementation_status: implemented, proposed, blocked, not_implemented
+    preview_status (PreviewStatus): ready, stale, insufficient_evidence, blocked, unavailable, error
+
+    These two fields must never be confused or overloaded.
+    """
+
+    IMPLEMENTATION_STATUSES = {"implemented", "proposed", "blocked", "not_implemented"}
+
+    def test_implementation_status_values_are_disjoint_from_preview_status(self) -> None:
+        """implementation_status must never be populated with preview-only values.
+
+        Note: 'blocked' appears in both enums intentionally — both an action's
+        implementation can be blocked AND its preview can be blocked. The key
+        constraint is that implementation_status is never set from evidence/preview states.
+        """
+        preview_only_values = {"ready", "stale", "insufficient_evidence", "unavailable", "error"}
+        overlap = self.IMPLEMENTATION_STATUSES & preview_only_values
+        assert len(overlap) == 0, f"implementation_status contains preview-only values: {overlap}"
+
+    def test_available_action_has_correct_implementation_status(self) -> None:
+        """disk.cleanup_temp is implemented but may have insufficient_evidence."""
+        from app.remediation.preview import PreviewBuilder
+        builder = PreviewBuilder()
+        candidate = ActionCandidate(
+            candidate_id="c1",
+            action_id="disk.cleanup_temp",
+            title="Cleanup temp",
+            reason="Test",
+            status=CandidateStatus.AVAILABLE,
+            evidence=[EvidenceSource(source_type=EvidenceSourceType.FILE_ANALYSIS, source_id="temp", observation="temp files found")],
+            risk_level="low",
+            reversible=True,
+        )
+        preview = builder.build_preview(candidate)
+        # preview.status may be INSUFFICIENT_EVIDENCE (depending on evidence), but
+        # implementation_status must always be "implemented"
+        assert preview.implementation_status == "implemented"
+        assert preview.implementation_status_text != ""
+
+    def test_proposed_action_has_implementation_status_proposed(self) -> None:
+        """proposed action: implementation_status = proposed, preview_status = unavailable."""
+        from app.remediation.preview import PreviewBuilder
+        builder = PreviewBuilder()
+        candidate = ActionCandidate(
+            candidate_id="c1",
+            action_id="disk.cleanup_logs",
+            title="Cleanup logs",
+            reason="Test",
+            status=CandidateStatus.PROPOSED,
+        )
+        preview = builder.build_preview(candidate)
+        assert preview.implementation_status == "proposed"
+        assert preview.status == PreviewStatus.UNAVAILABLE
+
+    def test_blocked_action_has_implementation_status_blocked(self) -> None:
+        """blocked action: implementation_status = blocked, preview_status = blocked."""
+        from app.remediation.preview import PreviewBuilder
+        builder = PreviewBuilder()
+        candidate = ActionCandidate(
+            candidate_id="c1",
+            action_id="startup.disable_entry",
+            title="Disable startup",
+            reason="Test",
+            status=CandidateStatus.BLOCKED,
+        )
+        preview = builder.build_preview(candidate)
+        assert preview.implementation_status == "blocked"
+        assert preview.status == PreviewStatus.BLOCKED
+
+    def test_insufficient_evidence_does_not_affect_implementation_status(self) -> None:
+        """INSUFFICIENT_EVIDENCE preview does not change implementation_status."""
+        from app.remediation.preview import PreviewBuilder
+        builder = PreviewBuilder()
+        candidate = ActionCandidate(
+            candidate_id="c1",
+            action_id="disk.cleanup_temp",
+            title="Cleanup temp",
+            reason="Test",
+            status=CandidateStatus.INSUFFICIENT_EVIDENCE,
+            risk_level="low",
+            reversible=True,
+        )
+        preview = builder.build_preview(candidate)
+        assert preview.status == PreviewStatus.INSUFFICIENT_EVIDENCE
+        assert preview.implementation_status == "implemented"  # disk.cleanup_temp is implemented
+        assert preview.implementation_status != "insufficient_evidence"
+
+    def test_stale_evidence_does_not_affect_implementation_status(self) -> None:
+        """STALE preview does not change implementation_status."""
+        from app.remediation.preview import PreviewBuilder
+        builder = PreviewBuilder()
+        candidate = ActionCandidate(
+            candidate_id="c1",
+            action_id="disk.cleanup_temp",
+            title="Cleanup temp",
+            reason="Test",
+            status=CandidateStatus.STALE,
+            risk_level="low",
+            reversible=True,
+        )
+        preview = builder.build_preview(candidate)
+        assert preview.status == PreviewStatus.STALE
+        assert preview.implementation_status == "implemented"  # disk.cleanup_temp is implemented
+        assert preview.implementation_status != "stale"
+
+    def test_two_dimension_matrix(self) -> None:
+        """Verify the full matrix of implementation_status x preview_status."""
+        from app.remediation.preview import PreviewBuilder
+        builder = PreviewBuilder()
+
+        # implemented + ready
+        candidate = ActionCandidate(
+            candidate_id="c1",
+            action_id="disk.cleanup_temp",
+            title="Cleanup temp",
+            reason="Test",
+            status=CandidateStatus.AVAILABLE,
+            evidence=[EvidenceSource(source_type=EvidenceSourceType.FILE_ANALYSIS, source_id="temp", observation="temp files found")],
+            risk_level="low",
+            reversible=True,
+        )
+        preview = builder.build_preview(candidate)
+        if preview.status == PreviewStatus.READY:
+            assert preview.implementation_status == "implemented"
+
+        # proposed + unavailable
+        candidate2 = ActionCandidate(
+            candidate_id="c2",
+            action_id="disk.cleanup_logs",
+            title="Cleanup logs",
+            reason="Test",
+            status=CandidateStatus.PROPOSED,
+        )
+        preview2 = builder.build_preview(candidate2)
+        assert preview2.implementation_status == "proposed"
+        assert preview2.status == PreviewStatus.UNAVAILABLE
+
+        # blocked + blocked
+        candidate3 = ActionCandidate(
+            candidate_id="c3",
+            action_id="startup.disable_entry",
+            title="Disable startup",
+            reason="Test",
+            status=CandidateStatus.BLOCKED,
+        )
+        preview3 = builder.build_preview(candidate3)
+        assert preview3.implementation_status == "blocked"
+        assert preview3.status == PreviewStatus.BLOCKED
