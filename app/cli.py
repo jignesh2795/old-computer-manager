@@ -1464,6 +1464,154 @@ def cmd_health_run(args: argparse.Namespace) -> int:
     return 1
 
 
+def _health_store():  # type: ignore[no-untyped-def]
+    """Open the persisted health session store (read-only callers)."""
+    from app.health.persistence import HealthSessionStore
+
+    return HealthSessionStore("data/computer.db")
+
+
+def _is_missing_table(exc: Exception) -> bool:
+    return "no such table" in str(exc)
+
+
+def _session_total_ms(session) -> int:  # type: ignore[no-untyped-def]
+    return sum(stage.duration_ms for stage in session.stages)
+
+
+def cmd_health_sessions(args: argparse.Namespace) -> int:
+    """List persisted health sessions (read-only)."""
+    import sqlite3
+
+    print("Old Computer Manager v0.15.1-alpha")
+
+    try:
+        sessions = _health_store().list_sessions()
+    except sqlite3.OperationalError as exc:
+        if not _is_missing_table(exc):
+            raise
+        sessions = []
+
+    if getattr(args, "json_output", False):
+        print(json.dumps([_session_summary(s) for s in sessions], indent=2))
+        return 0
+
+    print("Health Sessions")
+    print("------------------------------------------------------------")
+    if not sessions:
+        print("No health sessions found.")
+        return 0
+    print(f"{'ID':<24} {'Profile':<10} {'Status':<10} {'Started':<17} Duration")
+    for session in sessions:
+        started = (session.started_at or session.created_at or "")[:16].replace(
+            "T", " "
+        )
+        total_s = _session_total_ms(session) / 1000.0
+        print(
+            f"{session.session_id:<24} {session.profile:<10} "
+            f"{session.status.value:<10} {started:<17} {total_s:.1f}s"
+        )
+    return 0
+
+
+def _session_summary(session):  # type: ignore[no-untyped-def]
+    """Bounded deterministic inspection projection (references only)."""
+    return {
+        "session_id": session.session_id,
+        "profile": session.profile,
+        "status": session.status.value,
+        "created_at": session.created_at,
+        "started_at": session.started_at,
+        "completed_at": session.completed_at,
+        "data_quality": session.data_quality.value,
+        "stage_count": len(session.stages),
+        "discovery_run_id": session.discovery_run_id,
+        "evidence_ids": list(session.evidence_ids),
+    }
+
+
+def cmd_health_session(args: argparse.Namespace) -> int:
+    """Show one persisted health session (read-only)."""
+    import sqlite3
+
+    from app.health.models import HealthStageStatus
+
+    print("Old Computer Manager v0.15.1-alpha")
+
+    session_id = args.session_id
+    try:
+        session = _health_store().get_session(session_id)
+    except sqlite3.OperationalError as exc:
+        if not _is_missing_table(exc):
+            raise
+        session = None
+    if session is None:
+        print(f"Session '{session_id}' not found.")
+        return 1
+
+    if getattr(args, "json_output", False):
+        print(json.dumps(session.to_dict(), indent=2))
+        return 0
+
+    print(f"Session:       {session.session_id}")
+    print(f"Profile:       {session.profile}")
+    print(f"Status:        {session.status.value}")
+    print(f"Started:       {session.started_at or 'N/A'}")
+    print(f"Completed:     {session.completed_at or 'N/A'}")
+    print(f"Data quality:  {session.data_quality.value}")
+    print("\nStages:")
+    for stage in session.stages:
+        print(f"  {stage.stage_type.value:<12} {stage.status.value}")
+        if stage.status != HealthStageStatus.COMPLETED and stage.error:
+            print(f"    Reason: {stage.error}")
+    print(f"\ndiscovery_run_id: {session.discovery_run_id}")
+    print(f"evidence_ids:     {len(session.evidence_ids)}")
+    return 0
+
+
+def cmd_health_stages(args: argparse.Namespace) -> int:
+    """Show persisted stages for a session (read-only)."""
+    import sqlite3
+
+    from app.health.models import HealthStageStatus
+
+    print("Old Computer Manager v0.15.1-alpha")
+
+    session_id = args.session_id
+    try:
+        store = _health_store()
+        session = store.get_session(session_id)
+        stages = (
+            store.get_stages(session_id) if session is not None else []
+        )
+    except sqlite3.OperationalError as exc:
+        if not _is_missing_table(exc):
+            raise
+        session, stages = None, []
+    if session is None:
+        print(f"Session '{session_id}' not found.")
+        return 1
+
+    if getattr(args, "json_output", False):
+        print(json.dumps([stage.to_dict() for stage in stages], indent=2))
+        return 0
+
+    for stage in stages:
+        seconds = stage.duration_ms / 1000.0
+        print(f"Stage: {stage.stage_type.value}")
+        print(f"Status: {stage.status.value}")
+        print(f"Started: {stage.started_at or 'N/A'}")
+        print(f"Completed: {stage.completed_at or 'N/A'}")
+        print(f"Duration: {seconds:.2f}s")
+        print(f"Data quality: {stage.data_quality.value}")
+        print(f"Evidence timestamp: {stage.evidence_timestamp or 'N/A'}")
+        print(f"Evidence IDs: {list(stage.evidence_refs)}")
+        if stage.status != HealthStageStatus.COMPLETED and stage.error:
+            print(f"Error: {stage.error}")
+        print()
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         prog="old-computer-manager",
@@ -1667,6 +1815,35 @@ def main() -> int:
         help="Output session as JSON",
     )
 
+    # health sessions
+    health_sessions_parser = health_sub.add_parser(
+        "sessions", help="List persisted health sessions (read-only)"
+    )
+    health_sessions_parser.add_argument(
+        "--json", action="store_true", dest="json_output",
+        help="Output sessions as JSON",
+    )
+
+    # health session
+    health_session_parser = health_sub.add_parser(
+        "session", help="Show a persisted health session (read-only)"
+    )
+    health_session_parser.add_argument("session_id", help="Session ID to show")
+    health_session_parser.add_argument(
+        "--json", action="store_true", dest="json_output",
+        help="Output session as JSON",
+    )
+
+    # health stages
+    health_stages_parser = health_sub.add_parser(
+        "stages", help="Show persisted stages for a session (read-only)"
+    )
+    health_stages_parser.add_argument("session_id", help="Session ID to inspect")
+    health_stages_parser.add_argument(
+        "--json", action="store_true", dest="json_output",
+        help="Output stages as JSON",
+    )
+
     args = parser.parse_args()
 
     if args.command == "report":
@@ -1712,6 +1889,12 @@ def main() -> int:
     if args.command == "health":
         if args.health_command == "run":
             return cmd_health_run(args)
+        if args.health_command == "sessions":
+            return cmd_health_sessions(args)
+        if args.health_command == "session":
+            return cmd_health_session(args)
+        if args.health_command == "stages":
+            return cmd_health_stages(args)
         # Default: show help
         health_parser.print_help()
         return 0
