@@ -79,6 +79,14 @@ StageHandler = Callable[[StageInvocation], StageOutcome]
 _PREREQUISITES: dict[HealthStageType, tuple[HealthStageType, ...]] = {
     HealthStageType.ANALYSIS: (HealthStageType.DISCOVERY,),
     HealthStageType.HISTORY: (HealthStageType.DISCOVERY,),
+    HealthStageType.DIAGNOSTICS: (
+        HealthStageType.DISCOVERY,
+        HealthStageType.ANALYSIS,
+    ),
+    HealthStageType.AI: (
+        HealthStageType.DISCOVERY,
+        HealthStageType.ANALYSIS,
+    ),
     HealthStageType.CANDIDATES: (
         HealthStageType.DISCOVERY,
         HealthStageType.ANALYSIS,
@@ -92,16 +100,26 @@ def derive_session_status(
 ) -> HealthStageStatus:
     """Derive the session status from stage outcomes.
 
-    - Any required stage failed -> FAILED.
+    - Discovery failed -> FAILED (no evidence downstream).
+    - Candidates failed/skipped -> FAILED (primary output missing).
     - All requested completed -> COMPLETED.
-    - Requested completed but some other stage skipped -> PARTIAL.
+    - Otherwise -> PARTIAL (auxiliary stages failed or skipped while
+      the primary output was still produced).
     """
     by_type = {stage.stage_type: stage.status for stage in stages}
-    if any(
-        by_type.get(stage_type) == HealthStageStatus.FAILED
-        for stage_type in requested
+    if (
+        HealthStageType.DISCOVERY in requested
+        and by_type.get(HealthStageType.DISCOVERY)
+        == HealthStageStatus.FAILED
     ):
         return HealthStageStatus.FAILED
+    if HealthStageType.CANDIDATES in requested:
+        candidates_status = by_type.get(HealthStageType.CANDIDATES)
+        if candidates_status in (
+            HealthStageStatus.FAILED,
+            HealthStageStatus.SKIPPED,
+        ):
+            return HealthStageStatus.FAILED
     if all(
         by_type.get(stage_type) == HealthStageStatus.COMPLETED
         for stage_type in requested
@@ -155,6 +173,9 @@ class HealthSessionRunner:
         defaults: dict[HealthStageType, StageHandler] = {
             HealthStageType.DISCOVERY: self._handle_discovery,
             HealthStageType.ANALYSIS: self._handle_analysis,
+            HealthStageType.HISTORY: self._handle_history,
+            HealthStageType.DIAGNOSTICS: self._handle_diagnostics,
+            HealthStageType.AI: self._handle_ai,
             HealthStageType.CANDIDATES: self._handle_candidates,
         }
         if handlers:
@@ -336,6 +357,19 @@ class HealthSessionRunner:
             if outcome.ok
             else HealthStageStatus.FAILED
         )
+        error = outcome.error
+        if (
+            status == HealthStageStatus.COMPLETED
+            and len(outcome.evidence_refs)
+            > self._budgets.max_evidence_items
+        ):
+            status = HealthStageStatus.BUDGET_EXCEEDED
+            error = (
+                (f"{error}; " if error else "")
+                + f"stage exceeded max_evidence_items "
+                f"({len(outcome.evidence_refs)} > "
+                f"{self._budgets.max_evidence_items})"
+            )
         if outcome.discovery_run_id is not None:
             discovery_run_id = outcome.discovery_run_id
         terminal = transition_stage(
@@ -343,7 +377,7 @@ class HealthSessionRunner:
             status,
             completed_at=self._utcnow(),
             duration_ms=max(0, self._monotonic_ms() - start_ms),
-            error=outcome.error,
+            error=error,
         )
         final = replace(
             terminal,
@@ -360,25 +394,45 @@ class HealthSessionRunner:
             final.status == HealthStageStatus.COMPLETED
             and final.duration_ms > self._budgets.max_stage_runtime_ms
         ):
-            overrun = transition_stage(
+            final = self._to_budget_exceeded(
                 running,
-                HealthStageStatus.BUDGET_EXCEEDED,
-                completed_at=final.completed_at,
-                duration_ms=final.duration_ms,
-                error=(
-                    (f"{final.error}; " if final.error else "")
-                    + f"stage exceeded max_stage_runtime_ms "
-                    f"({final.duration_ms} > "
-                    f"{self._budgets.max_stage_runtime_ms})"
-                ),
+                final,
+                f"stage exceeded max_stage_runtime_ms "
+                f"({final.duration_ms} > "
+                f"{self._budgets.max_stage_runtime_ms})",
             )
-            final = replace(
-                overrun,
-                data_quality=final.data_quality,
-                evidence_refs=final.evidence_refs,
-                provenance=final.provenance,
-            )
+        if (
+            final.status == HealthStageStatus.COMPLETED
+            and final.error is not None
+            and "max_ai_context_items" in final.error
+        ):
+            final = self._to_budget_exceeded(running, final, None)
         return final, discovery_run_id
+
+    def _to_budget_exceeded(
+        self,
+        running: HealthStage,
+        final: HealthStage,
+        message: str | None,
+    ) -> HealthStage:
+        """Move a completed stage to budget_exceeded via the contract."""
+        base = final.error or ""
+        if message and message not in base:
+            base = f"{base}; {message}" if base else message
+        overrun = transition_stage(
+            running,
+            HealthStageStatus.BUDGET_EXCEEDED,
+            completed_at=final.completed_at,
+            duration_ms=final.duration_ms,
+            error=base or None,
+        )
+        return replace(
+            overrun,
+            data_quality=final.data_quality,
+            evidence_refs=final.evidence_refs,
+            evidence_timestamp=final.evidence_timestamp,
+            provenance=final.provenance,
+        )
 
     def _skipped_stage(
         self, session_id: str, stage_type: HealthStageType, reason: str
@@ -438,6 +492,107 @@ class HealthSessionRunner:
             provenance={
                 "source_type": "analysis",
                 "source_id": str(invocation.discovery_run_id),
+            },
+        )
+
+    def _handle_history(self, invocation: StageInvocation) -> StageOutcome:
+        from app.history.runner import run_history
+
+        summary = run_history(
+            invocation.store,
+            limit=invocation.budgets.max_history_runs,
+        )
+        runs_considered = int(
+            getattr(summary, "runs_considered", 0) or 0
+        )
+        refs = (
+            (f"discovery_run:{invocation.discovery_run_id}",)
+            if invocation.discovery_run_id is not None
+            else ()
+        )
+        return StageOutcome(
+            ok=True,
+            data_quality=(
+                DataQuality.GOOD
+                if runs_considered > 0
+                else DataQuality.UNKNOWN
+            ),
+            evidence_refs=refs,
+            provenance={
+                "source_type": "history",
+                "source_id": str(invocation.discovery_run_id),
+                "runs_considered": str(runs_considered),
+            },
+        )
+
+    def _handle_diagnostics(
+        self, invocation: StageInvocation
+    ) -> StageOutcome:
+        from app.diagnostics.runner import run_diagnostics, save_diagnostic_run
+
+        run = run_diagnostics(
+            discovery_run_id=invocation.discovery_run_id
+        )
+        diagnostic_run_id = save_diagnostic_run(run, invocation.store)
+        refs: tuple[str, ...] = ()
+        if diagnostic_run_id is not None:
+            refs = (f"diagnostic_run:{diagnostic_run_id}",)
+        elif invocation.discovery_run_id is not None:
+            refs = (f"discovery_run:{invocation.discovery_run_id}",)
+        errors = len(getattr(run, "errors", []) or [])
+        return StageOutcome(
+            ok=True,
+            data_quality=(
+                DataQuality.GOOD
+                if getattr(run, "status", "") == "completed"
+                else DataQuality.DEGRADED
+            ),
+            evidence_refs=refs,
+            provenance={
+                "source_type": "diagnostics",
+                "source_id": str(diagnostic_run_id),
+                "errors": str(errors),
+            },
+        )
+
+    def _handle_ai(self, invocation: StageInvocation) -> StageOutcome:
+        from app.ai.runner import run_advisory
+
+        advisory = run_advisory(invocation.store)
+        item_count = (
+            len(getattr(advisory, "observations", []) or [])
+            + len(getattr(advisory, "recommendations", []) or [])
+            + len(getattr(advisory, "uncertainties", []) or [])
+        )
+        refs = (
+            (f"discovery_run:{invocation.discovery_run_id}",)
+            if invocation.discovery_run_id is not None
+            else ()
+        )
+        if item_count > invocation.budgets.max_ai_context_items:
+            return StageOutcome(
+                ok=True,
+                data_quality=DataQuality.DEGRADED,
+                evidence_refs=refs,
+                provenance={
+                    "source_type": "ai",
+                    "source_id": str(invocation.discovery_run_id),
+                    "context_items": str(item_count),
+                },
+                error=(
+                    f"advisory exceeded max_ai_context_items "
+                    f"({item_count} > "
+                    f"{invocation.budgets.max_ai_context_items})"
+                ),
+            )
+        return StageOutcome(
+            ok=True,
+            data_quality=DataQuality.GOOD,
+            evidence_refs=refs,
+            provenance={
+                "source_type": "ai",
+                "source_id": str(invocation.discovery_run_id),
+                "context_items": str(item_count),
             },
         )
 
