@@ -218,73 +218,300 @@ def _row_to_record(row: tuple) -> QuarantineRecord:
 
 @dataclass(frozen=True)
 class ReconciliationIssue:
-    """A quarantine consistency issue found during reconciliation."""
+    """A quarantine consistency issue found during reconciliation.
 
-    issue_type: str  # "record_without_file", "file_without_record", "path_mismatch"
-    record_id: int | None = None
+    Attributes:
+        issue_id: Stable identifier for this issue instance.
+        issue_type: Category of inconsistency.
+        quarantine_path: Path to the quarantine file, when known.
+        record_id: Database record ID, when known.
+        original_path: Original file path, when known.
+        size: File size in bytes, when known.
+        detected_at: ISO timestamp when this issue was detected.
+        explanation: Human-readable explanation.
+        recoverability: How this issue can be addressed.
+        recommended_next_step: What a human should do.
+    """
+
+    issue_type: str
+    issue_id: str = ""
     quarantine_path: str = ""
+    record_id: int | None = None
     original_path: str = ""
-    detail: str = ""
+    size: int = 0
+    detected_at: str = ""
+    explanation: str = ""
+    recoverability: str = "unknown"
+    recommended_next_step: str = ""
+
+
+# Valid issue types
+VALID_ISSUE_TYPES = frozenset({
+    "valid_record",
+    "file_without_record",
+    "record_without_file",
+    "empty_original_path",
+    "duplicate_record",
+    "invalid_record",
+    "unexpected_quarantine_entry",
+})
+
+# Recovery classifications
+RECOVERABILITY_CLASSIFICATIONS = frozenset({
+    "recoverable",
+    "requires_manual_review",
+    "unrecoverable",
+    "unknown",
+})
+
+# Known test artifact patterns (from first live test runs)
+_TEST_ARTIFACT_PATTERNS = (
+    "ocm-test-disposable-",
+    "wct",  # Windows Compatibility Telemetry temp files
+    "mat-debug-",  # MAT debug logs
+    "jb.station.",  # JetBrains station files
+    "jetbrainsd",  # JetBrains daemon files
+    "_.ses",  # Session files
+)
+
+
+def _is_test_artifact(filename: str) -> bool:
+    """Check if a filename matches known test-artifact patterns."""
+    return any(pattern in filename for pattern in _TEST_ARTIFACT_PATTERNS)
 
 
 def reconcile_quarantine(
     quarantine_dir: Path,
     store: QuarantineStore,
-) -> list[ReconciliationIssue]:
+) -> ReconciliationReport:
     """Check quarantine consistency between filesystem and database.
+
+    This function is READ-ONLY. It inspects the quarantine directory and
+    database records but does NOT modify, move, delete, or restore any files.
 
     Identifies:
     - quarantine file with no matching record (orphaned file)
     - record with missing quarantine file (broken reference)
-    - record with mismatched original_path (data integrity)
-
-    Does NOT restore or delete anything. Reports only.
+    - record with empty original_path (rollback impossible)
+    - duplicate records for the same quarantine path
+    - invalid records with missing required fields
     """
+    from datetime import datetime, timezone
+
+    detected_at = datetime.now(timezone.utc).isoformat()
     issues: list[ReconciliationIssue] = []
+    issue_counter = 0
+
+    def _next_issue_id() -> str:
+        nonlocal issue_counter
+        issue_counter += 1
+        return f"rq-{issue_counter:04d}"
 
     # Load all non-restored records
     records = store.list_records(restored=False)
-    record_by_qpath = {r.quarantine_path: r for r in records}
 
-    # Check each quarantine file
+    # Build lookup: quarantine_path -> list of records
+    records_by_qpath: dict[str, list[QuarantineRecord]] = {}
+    for rec in records:
+        records_by_qpath.setdefault(rec.quarantine_path, []).append(rec)
+
+    # Scan quarantine directory
+    scanned_files = 0
+    file_without_record_count = 0
+    duplicate_record_count = 0
+    invalid_record_count = 0
+
     if quarantine_dir.exists():
         for entry in quarantine_dir.iterdir():
             if not entry.is_file():
                 continue
+            scanned_files += 1
             qpath = str(entry)
-            if qpath in record_by_qpath:
-                rec = record_by_qpath[qpath]
-                # Verify original_path is not empty
+
+            matching_records = records_by_qpath.get(qpath, [])
+
+            if not matching_records:
+                # File exists but no record
+                file_without_record_count += 1
+                is_artifact = _is_test_artifact(entry.name)
+                stat = entry.stat()
+
+                if is_artifact:
+                    explanation = (
+                        f"Quarantine file '{entry.name}' has no database record. "
+                        f"Matches known test-artifact naming pattern."
+                    )
+                    recoverability = "recoverable"
+                    next_step = "Manual review recommended. File matches test-artifact pattern."
+                else:
+                    explanation = (
+                        f"Quarantine file '{entry.name}' has no database record. "
+                        f"Provenance unknown."
+                    )
+                    recoverability = "requires_manual_review"
+                    next_step = "Manual review required to determine file provenance."
+
+                issues.append(ReconciliationIssue(
+                    issue_type="file_without_record",
+                    issue_id=_next_issue_id(),
+                    quarantine_path=qpath,
+                    size=stat.st_size,
+                    detected_at=detected_at,
+                    explanation=explanation,
+                    recoverability=recoverability,
+                    recommended_next_step=next_step,
+                ))
+            else:
+                # File has matching record(s)
+                rec = matching_records[0]
+
+                # Check for duplicate records
+                if len(matching_records) > 1:
+                    duplicate_record_count += 1
+                    issues.append(ReconciliationIssue(
+                        issue_type="duplicate_record",
+                        issue_id=_next_issue_id(),
+                        quarantine_path=qpath,
+                        record_id=rec.id,
+                        original_path=rec.original_path,
+                        size=rec.original_size,
+                        detected_at=detected_at,
+                        explanation=(
+                            f"Multiple records ({len(matching_records)}) exist for "
+                            f"quarantine file '{entry.name}'."
+                        ),
+                        recoverability="requires_manual_review",
+                        recommended_next_step=(
+                            "Manual review required to determine which record is authoritative."
+                        ),
+                    ))
+
+                # Check for empty original_path
                 if not rec.original_path:
                     issues.append(ReconciliationIssue(
                         issue_type="empty_original_path",
-                        record_id=rec.id,
+                        issue_id=_next_issue_id(),
                         quarantine_path=qpath,
-                        original_path="",
-                        detail=(
-                            f"Record #{rec.id} has empty original_path "
-                            f"— rollback impossible"
+                        record_id=rec.id,
+                        size=rec.original_size,
+                        detected_at=detected_at,
+                        explanation=(
+                            f"Record #{rec.id} has empty original_path. "
+                            f"Rollback to original location is impossible."
+                        ),
+                        recoverability="unrecoverable",
+                        recommended_next_step=(
+                            "File cannot be restored to its original location. "
+                            "Manual recovery from quarantine path is possible."
                         ),
                     ))
-            else:
-                issues.append(ReconciliationIssue(
-                    issue_type="file_without_record",
-                    quarantine_path=qpath,
-                    detail=f"Quarantine file has no database record: {entry.name}",
-                ))
+
+                # Check for invalid record (missing required fields)
+                if not rec.action_id:
+                    invalid_record_count += 1
+                    issues.append(ReconciliationIssue(
+                        issue_type="invalid_record",
+                        issue_id=_next_issue_id(),
+                        quarantine_path=qpath,
+                        record_id=rec.id,
+                        detected_at=detected_at,
+                        explanation=f"Record #{rec.id} is missing action_id.",
+                        recoverability="requires_manual_review",
+                        recommended_next_step="Manual review required to determine record validity.",
+                    ))
 
     # Check for records pointing to missing files
+    record_without_file_count = 0
     for rec in records:
         qpath = rec.quarantine_path
-        if not Path(qpath).exists():
+        if not qpath or not Path(qpath).exists():
+            record_without_file_count += 1
             issues.append(ReconciliationIssue(
                 issue_type="record_without_file",
-                record_id=rec.id,
+                issue_id=_next_issue_id(),
                 quarantine_path=qpath,
+                record_id=rec.id,
                 original_path=rec.original_path,
-                detail=(
-                    f"Record #{rec.id} references missing file: {qpath}"
+                size=rec.original_size,
+                detected_at=detected_at,
+                explanation=(
+                    f"Record #{rec.id} references missing file: "
+                    f"{qpath or '(empty path)'}. "
+                    f"Original location: {rec.original_path or '(unknown)'}."
+                ),
+                recoverability="requires_manual_review",
+                recommended_next_step=(
+                    "Manual review required. File may have been restored "
+                    "or deleted outside the system."
                 ),
             ))
 
-    return issues
+    # Build summary counts
+    valid_record_count = scanned_files - file_without_record_count
+
+    return ReconciliationReport(
+        scanned_files=scanned_files,
+        valid_records=valid_record_count,
+        file_without_record_count=file_without_record_count,
+        record_without_file_count=record_without_file_count,
+        duplicate_record_count=duplicate_record_count,
+        invalid_record_count=invalid_record_count,
+        issues=issues,
+        detected_at=detected_at,
+    )
+
+
+@dataclass(frozen=True)
+class ReconciliationReport:
+    """Structured reconciliation result.
+
+    A clean reconciliation (clean=True) means "No detected inconsistency."
+    """
+
+    scanned_files: int = 0
+    valid_records: int = 0
+    file_without_record_count: int = 0
+    record_without_file_count: int = 0
+    duplicate_record_count: int = 0
+    invalid_record_count: int = 0
+    issues: tuple[ReconciliationIssue, ...] = ()
+    detected_at: str = ""
+
+    @property
+    def clean(self) -> bool:
+        """True if no inconsistencies were detected."""
+        return len(self.issues) == 0
+
+    @property
+    def total_issues(self) -> int:
+        """Total number of issues found."""
+        return len(self.issues)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize to a JSON-compatible dictionary."""
+        return {
+            "scanned_files": self.scanned_files,
+            "valid_records": self.valid_records,
+            "file_without_record_count": self.file_without_record_count,
+            "record_without_file_count": self.record_without_file_count,
+            "duplicate_record_count": self.duplicate_record_count,
+            "invalid_record_count": self.invalid_record_count,
+            "total_issues": self.total_issues,
+            "clean": self.clean,
+            "detected_at": self.detected_at,
+            "issues": [
+                {
+                    "issue_id": i.issue_id,
+                    "issue_type": i.issue_type,
+                    "quarantine_path": i.quarantine_path,
+                    "record_id": i.record_id,
+                    "original_path": i.original_path,
+                    "size": i.size,
+                    "detected_at": i.detected_at,
+                    "explanation": i.explanation,
+                    "recoverability": i.recoverability,
+                    "recommended_next_step": i.recommended_next_step,
+                }
+                for i in self.issues
+            ],
+        }

@@ -26,7 +26,6 @@ from app.remediation.cleanup_temp import (
 from app.remediation.quarantine_store import (
     QuarantineRecord,
     QuarantineStore,
-    ReconciliationIssue,
     reconcile_quarantine,
 )
 
@@ -312,10 +311,16 @@ class TestMissingRecordDetected:
         orphan = qdir / "orphan.txt"
         orphan.write_text("orphan content")
 
-        issues = reconcile_quarantine(qdir, store)
-        assert len(issues) == 1
-        assert issues[0].issue_type == "file_without_record"
-        assert "orphan.txt" in issues[0].quarantine_path
+        report = reconcile_quarantine(qdir, store)
+        assert report.total_issues == 1
+        assert report.clean is False
+        assert report.file_without_record_count == 1
+        issue = report.issues[0]
+        assert issue.issue_type == "file_without_record"
+        assert "orphan.txt" in issue.quarantine_path
+        assert issue.issue_id.startswith("rq-")
+        assert issue.explanation != ""
+        assert issue.detected_at != ""
 
 
 # L: Missing quarantine file detected
@@ -332,10 +337,13 @@ class TestMissingFileDetected:
         )
         store.create_record(record)
 
-        issues = reconcile_quarantine(qdir, store)
-        assert len(issues) == 1
-        assert issues[0].issue_type == "record_without_file"
-        assert issues[0].record_id is not None
+        report = reconcile_quarantine(qdir, store)
+        assert report.total_issues == 1
+        assert report.record_without_file_count == 1
+        issue = report.issues[0]
+        assert issue.issue_type == "record_without_file"
+        assert issue.record_id is not None
+        assert issue.explanation != ""
 
 
 # M: Retry safety
@@ -361,9 +369,11 @@ class TestRetrySafety:
         store.create_record(record)
         (qdir / "somefile.txt").write_text("content")
 
-        issues = reconcile_quarantine(qdir, store)
-        assert len(issues) == 1
-        assert issues[0].issue_type == "empty_original_path"
+        report = reconcile_quarantine(qdir, store)
+        assert report.total_issues == 1
+        issue = report.issues[0]
+        assert issue.issue_type == "empty_original_path"
+        assert issue.recoverability == "unrecoverable"
 
 
 # N: Audit counts match actual mutation
@@ -450,8 +460,9 @@ class TestReconciliationClean:
             )
             store.create_record(record)
 
-        issues = reconcile_quarantine(qdir, store)
-        assert len(issues) == 0
+        report = reconcile_quarantine(qdir, store)
+        assert report.clean is True
+        assert report.total_issues == 0
 
     def test_mixed_issues_detected(self, qdir, store):
         # File without record
@@ -468,10 +479,12 @@ class TestReconciliationClean:
         )
         store.create_record(record)
 
-        issues = reconcile_quarantine(qdir, store)
-        types = {i.issue_type for i in issues}
+        report = reconcile_quarantine(qdir, store)
+        types = {i.issue_type for i in report.issues}
         assert "file_without_record" in types
         assert "record_without_file" in types
+        assert report.total_issues == 2
+        assert report.clean is False
 
 
 # -----------------------------------------------------------------------
@@ -538,8 +551,9 @@ class TestSyntheticIntegration:
         assert len(record_ids) == 3
 
         # Step 4: Reconcile — should be clean
-        issues = reconcile_quarantine(qdir, store)
-        assert len(issues) == 0
+        report = reconcile_quarantine(qdir, store)
+        assert report.clean is True
+        assert report.total_issues == 0
 
         # Step 5: Rollback all 3 files
         for rid in record_ids:
@@ -597,5 +611,96 @@ class TestSyntheticIntegration:
         assert db_bytes == total_expected
 
         # Stage 3: Reconciliation clean
-        issues = reconcile_quarantine(qdir, store)
-        assert len(issues) == 0
+        report = reconcile_quarantine(qdir, store)
+        assert report.clean is True
+        assert report.total_issues == 0
+        assert report.scanned_files == 3
+
+
+# -----------------------------------------------------------------------
+# ReconciliationReport shape (enriched API)
+# -----------------------------------------------------------------------
+
+
+class TestReconciliationReport:
+    def test_duplicate_records_detected(self, qdir, store):
+        target = qdir / "dup.txt"
+        target.write_text("dup content")
+        for _ in range(2):
+            store.create_record(
+                QuarantineRecord(
+                    action_id="disk.cleanup_temp",
+                    audit_record_id=1,
+                    original_path="/tmp/dup.txt",
+                    quarantine_path=str(target),
+                    original_size=11,
+                    original_mtime="2026-01-01T00:00:00+00:00",
+                )
+            )
+
+        report = reconcile_quarantine(qdir, store)
+        types = {i.issue_type for i in report.issues}
+        assert "duplicate_record" in types
+        assert report.duplicate_record_count == 1
+
+    def test_invalid_record_detected(self, qdir, store):
+        target = qdir / "invalid.txt"
+        target.write_text("invalid content")
+        store.create_record(
+            QuarantineRecord(
+                action_id="",
+                audit_record_id=1,
+                original_path="/tmp/invalid.txt",
+                quarantine_path=str(target),
+                original_size=15,
+                original_mtime="2026-01-01T00:00:00+00:00",
+            )
+        )
+
+        report = reconcile_quarantine(qdir, store)
+        types = {i.issue_type for i in report.issues}
+        assert "invalid_record" in types
+        assert report.invalid_record_count == 1
+
+    def test_issue_ids_are_sequenced(self, qdir, store):
+        (qdir / "a.txt").write_text("a")
+        (qdir / "b.txt").write_text("b")
+
+        report = reconcile_quarantine(qdir, store)
+        assert report.total_issues == 2
+        assert [i.issue_id for i in report.issues] == ["rq-0001", "rq-0002"]
+
+    def test_report_serializes(self, qdir, store):
+        (qdir / "orphan.txt").write_text("orphan")
+
+        report = reconcile_quarantine(qdir, store)
+        payload = report.to_dict()
+        assert payload["total_issues"] == 1
+        assert payload["clean"] is False
+        assert payload["file_without_record_count"] == 1
+        assert len(payload["issues"]) == 1
+        assert payload["issues"][0]["issue_type"] == "file_without_record"
+
+    def test_reconcile_is_read_only(self, qdir, store):
+        (qdir / "orphan.txt").write_text("orphan")
+        store.create_record(
+            QuarantineRecord(
+                action_id="disk.cleanup_temp",
+                audit_record_id=1,
+                original_path="/tmp/gone.txt",
+                quarantine_path=str(qdir / "gone.txt"),
+                original_size=50,
+                original_mtime="2026-01-01T00:00:00+00:00",
+            )
+        )
+        files_before = sorted(p.name for p in qdir.iterdir())
+        records_before = len(store.list_records())
+
+        first = reconcile_quarantine(qdir, store)
+        second = reconcile_quarantine(qdir, store)
+
+        assert sorted(p.name for p in qdir.iterdir()) == files_before
+        assert len(store.list_records()) == records_before
+        assert [i.issue_type for i in first.issues] == [
+            i.issue_type for i in second.issues
+        ]
