@@ -1396,6 +1396,66 @@ def cmd_diagnostics(args: argparse.Namespace) -> int:
     return 0
 
 
+_STAGE_MARKERS = {
+    "completed": "OK",
+    "partial": "PARTIAL",
+    "failed": "FAIL",
+    "skipped": "SKIPPED",
+    "budget_exceeded": "BUDGET",
+    "stale": "STALE",
+}
+
+
+def cmd_health_run(args: argparse.Namespace) -> int:
+    """Run a health session (assessment only, never remediation)."""
+    from app.health.models import HealthStageStatus
+    from app.health.profiles import get_profile
+    from app.health.runner import HealthSessionRunner
+
+    print("Old Computer Manager v0.15.1-alpha")
+
+    profile_name = getattr(args, "profile", None) or "quick"
+    try:
+        get_profile(profile_name)
+    except ValueError:
+        print(f"Unknown profile: {profile_name}")
+        print("Valid profiles: quick, standard, full, diagnostic, advisory")
+        return 2
+
+    runner = HealthSessionRunner(profile=profile_name)
+    session = runner.run_session()
+
+    if getattr(args, "json_output", False):
+        print(json.dumps(session.to_dict(), indent=2))
+    else:
+        print("Health Session")
+        print("------------------------------------")
+        print(f"\nSession:  {session.session_id}")
+        print(f"Profile:  {session.profile}")
+        print(f"Status:   {session.status.value}")
+        print("\nStages:")
+        for stage in session.stages:
+            marker = _STAGE_MARKERS.get(stage.status.value, "..")
+            seconds = stage.duration_ms / 1000.0
+            print(f"  [{marker}] {stage.stage_type.value:<12} {seconds:.2f}s")
+            if stage.status != HealthStageStatus.COMPLETED and stage.error:
+                print(f"         Reason: {stage.error}")
+        print(f"\nData quality: {session.data_quality.value}")
+        total_s = sum(stage.duration_ms for stage in session.stages) / 1000.0
+        print(f"Total stage time: {total_s:.2f}s")
+        print(
+            "\nNOTE: Health sessions assess only; "
+            "they never execute remediation."
+        )
+
+    if session.status in (
+        HealthStageStatus.COMPLETED,
+        HealthStageStatus.PARTIAL,
+    ):
+        return 0
+    return 1
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         prog="old-computer-manager",
@@ -1580,6 +1640,25 @@ def main() -> int:
         help="Specific category: disk, thermal, performance, devices, windows, event_log, reliability, boot_timing, network_health, driver_consistency",
     )
 
+    # health subcommand with sub-subcommands
+    health_parser = sub.add_parser(
+        "health", help="Health sessions (assessment only, never remediation)"
+    )
+    health_sub = health_parser.add_subparsers(dest="health_command")
+
+    # health run
+    health_run_parser = health_sub.add_parser(
+        "run", help="Run a health session for a profile"
+    )
+    health_run_parser.add_argument(
+        "--profile", type=str, default="quick",
+        help="Run profile: quick, standard, full, diagnostic, advisory (default: quick)",
+    )
+    health_run_parser.add_argument(
+        "--json", action="store_true", dest="json_output",
+        help="Output session as JSON",
+    )
+
     args = parser.parse_args()
 
     if args.command == "report":
@@ -1622,6 +1701,12 @@ def main() -> int:
         if args.actions_command == "execute-candidate":
             return cmd_actions_execute_candidate(args)
         return cmd_actions(args)
+    if args.command == "health":
+        if args.health_command == "run":
+            return cmd_health_run(args)
+        # Default: show help
+        health_parser.print_help()
+        return 0
     # Default: discover
     return cmd_discover(args)
 
