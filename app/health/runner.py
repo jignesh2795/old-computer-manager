@@ -136,6 +136,7 @@ class HealthSessionRunner:
         profile: str | HealthProfile = DEFAULT_PROFILE,
         budgets: HealthBudgets | None = None,
         store: Any | None = None,
+        session_store: Any | None = None,
         handlers: dict[HealthStageType, StageHandler] | None = None,
         session_id_factory: Callable[[], str] | None = None,
         utcnow: Callable[[], str] | None = None,
@@ -144,6 +145,8 @@ class HealthSessionRunner:
         self._config = get_profile(profile)
         self._budgets = budgets if budgets is not None else DEFAULT_BUDGETS
         self._store = store
+        self._session_store = session_store
+        self.last_persistence_errors: list[str] = []
         self._session_id_factory = session_id_factory
         self._utcnow = utcnow if utcnow is not None else _utcnow
         self._monotonic_ms = (
@@ -179,6 +182,20 @@ class HealthSessionRunner:
 
             store = SnapshotStore()
 
+        self.last_persistence_errors = []
+        persist = self._session_store is not None
+        self._persist_session(
+            HealthSession(
+                session_id=session_id,
+                profile=self._config.profile.value,
+                created_at=now,
+                started_at=now,
+                status=HealthStageStatus.RUNNING,
+                budgets=self._budgets.to_dict(),
+            )
+        )
+        persist = persist and not self.last_persistence_errors
+
         stages: list[HealthStage] = []
         completed: dict[HealthStageType, HealthStageStatus] = {}
         discovery_run_id: int | None = None
@@ -188,6 +205,8 @@ class HealthSessionRunner:
             )
             stages.append(stage)
             completed[stage_type] = stage.status
+            if persist:
+                self._persist_stage(session_id, stage)
 
         completed_at = self._utcnow()
         elapsed_ms = self._monotonic_ms() - session_start_ms
@@ -201,7 +220,7 @@ class HealthSessionRunner:
                 if ref not in evidence_ids:
                     evidence_ids.append(ref)
 
-        return HealthSession(
+        session = HealthSession(
             session_id=session_id,
             profile=self._config.profile.value,
             created_at=now,
@@ -214,6 +233,42 @@ class HealthSessionRunner:
             discovery_run_id=discovery_run_id,
             evidence_ids=tuple(evidence_ids),
         )
+        if persist:
+            self._persist_session_final(session)
+        return session
+
+    def _persist_session(self, session: HealthSession) -> None:
+        """Persist the opened session; storage failure is recorded."""
+        if self._session_store is None:
+            return
+        try:
+            self._session_store.create_session(session)
+        except Exception as exc:
+            self.last_persistence_errors.append(
+                f"create_session failed: {exc}"
+            )
+
+    def _persist_stage(self, session_id: str, stage: HealthStage) -> None:
+        """Persist one stage; storage failure is recorded."""
+        if self._session_store is None:
+            return
+        try:
+            self._session_store.save_stage(session_id, stage)
+        except Exception as exc:
+            self.last_persistence_errors.append(
+                f"save_stage {stage.stage_type.value} failed: {exc}"
+            )
+
+    def _persist_session_final(self, session: HealthSession) -> None:
+        """Persist the finalized session; storage failure is recorded."""
+        if self._session_store is None:
+            return
+        try:
+            self._session_store.finalize_session(session)
+        except Exception as exc:
+            self.last_persistence_errors.append(
+                f"finalize_session failed: {exc}"
+            )
 
     # -- stage execution -----------------------------------------------
 

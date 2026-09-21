@@ -347,6 +347,60 @@ class SnapshotStore:
                     "ADD COLUMN collection_time_ms INTEGER NOT NULL DEFAULT 0"
                 )
 
+        # Create health_sessions table if it does not exist.
+        # Orchestration index only: references evidence, never payloads.
+        cursor = connection.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' "
+            "AND name='health_sessions'"
+        )
+        if cursor.fetchone() is None:
+            connection.execute(
+                "CREATE TABLE health_sessions ("
+                "    session_id TEXT PRIMARY KEY,"
+                "    profile TEXT NOT NULL,"
+                "    status TEXT NOT NULL,"
+                "    created_at TEXT NOT NULL,"
+                "    started_at TEXT,"
+                "    completed_at TEXT,"
+                "    budgets_json TEXT NOT NULL DEFAULT '{}',"
+                "    data_quality TEXT NOT NULL DEFAULT 'unknown',"
+                "    discovery_run_id INTEGER,"
+                "    evidence_ids_json TEXT NOT NULL DEFAULT '[]',"
+                "    error TEXT"
+                ")"
+            )
+
+        # Create health_stages table if it does not exist.
+        cursor = connection.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' "
+            "AND name='health_stages'"
+        )
+        if cursor.fetchone() is None:
+            connection.execute(
+                "CREATE TABLE health_stages ("
+                "    id INTEGER PRIMARY KEY AUTOINCREMENT,"
+                "    session_id TEXT NOT NULL"
+                "      REFERENCES health_sessions(session_id),"
+                "    stage_id TEXT NOT NULL,"
+                "    stage_type TEXT NOT NULL,"
+                "    status TEXT NOT NULL,"
+                "    started_at TEXT,"
+                "    completed_at TEXT,"
+                "    duration_ms INTEGER NOT NULL DEFAULT 0,"
+                "    error TEXT,"
+                "    evidence_timestamp TEXT,"
+                "    data_quality TEXT NOT NULL DEFAULT 'unknown',"
+                "    discovery_run_id INTEGER,"
+                "    evidence_ids_json TEXT NOT NULL DEFAULT '[]',"
+                "    provenance_json TEXT NOT NULL DEFAULT '{}',"
+                "    UNIQUE (session_id, stage_type)"
+                ")"
+            )
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_health_stages_session "
+                "ON health_stages(session_id)"
+            )
+
     def start_run(self) -> int:
         """Record the start of a discovery run. Returns the run id."""
         with self._connect() as connection:

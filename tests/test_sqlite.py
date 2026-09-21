@@ -115,6 +115,73 @@ class TestMigration:
             assert count == 1
 
 
+class TestHealthTablesMigration:
+    def test_fresh_database_creates_health_tables(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "test.db"
+            SnapshotStore(path=db_path)
+
+            conn = sqlite3.connect(db_path)
+            c = conn.cursor()
+            c.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+                " AND name IN ('health_sessions', 'health_stages')"
+            )
+            tables = {row[0] for row in c.fetchall()}
+            conn.close()
+
+            assert tables == {"health_sessions", "health_stages"}
+
+    def test_existing_database_gains_tables_preserves_data(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "test.db"
+
+            conn = sqlite3.connect(db_path)
+            conn.executescript(
+                "CREATE TABLE discovery_runs ("
+                "    id INTEGER PRIMARY KEY AUTOINCREMENT,"
+                "    started_at TEXT,"
+                "    completed_at TEXT,"
+                "    status TEXT"
+                ");"
+                "INSERT INTO discovery_runs(status) VALUES ('completed');"
+            )
+            conn.close()
+
+            SnapshotStore(path=db_path)
+
+            conn = sqlite3.connect(db_path)
+            c = conn.cursor()
+            c.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+                " AND name IN ('health_sessions', 'health_stages')"
+            )
+            tables = {row[0] for row in c.fetchall()}
+            c.execute("SELECT status FROM discovery_runs")
+            old_row = c.fetchone()
+            conn.close()
+
+            assert tables == {"health_sessions", "health_stages"}
+            assert old_row[0] == "completed"
+
+    def test_health_migration_idempotent(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "test.db"
+            SnapshotStore(path=db_path)
+            SnapshotStore(path=db_path)
+
+            conn = sqlite3.connect(db_path)
+            c = conn.cursor()
+            c.execute(
+                "SELECT count(*) FROM sqlite_master WHERE type='table'"
+                " AND name IN ('health_sessions', 'health_stages')"
+            )
+            count = c.fetchone()[0]
+            conn.close()
+
+            assert count == 2
+
+
 class TestRunLifecycle:
     def test_start_and_complete_run(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

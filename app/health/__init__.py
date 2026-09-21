@@ -31,6 +31,7 @@ from app.health.runner import (
     derive_data_quality,
     derive_session_status,
 )
+from app.health.persistence import HealthSessionStore
 
 __all__ = [
     "TERMINAL_STATUSES",
@@ -42,6 +43,7 @@ __all__ = [
     "HealthProfile",
     "HealthSession",
     "HealthSessionRunner",
+    "HealthSessionStore",
     "HealthStage",
     "HealthStageStatus",
     "HealthStageType",

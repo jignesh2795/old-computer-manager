@@ -1409,6 +1409,7 @@ _STAGE_MARKERS = {
 def cmd_health_run(args: argparse.Namespace) -> int:
     """Run a health session (assessment only, never remediation)."""
     from app.health.models import HealthStageStatus
+    from app.health.persistence import HealthSessionStore
     from app.health.profiles import get_profile
     from app.health.runner import HealthSessionRunner
 
@@ -1422,7 +1423,10 @@ def cmd_health_run(args: argparse.Namespace) -> int:
         print("Valid profiles: quick, standard, full, diagnostic, advisory")
         return 2
 
-    runner = HealthSessionRunner(profile=profile_name)
+    runner = HealthSessionRunner(
+        profile=profile_name,
+        session_store=HealthSessionStore("data/computer.db"),
+    )
     session = runner.run_session()
 
     if getattr(args, "json_output", False):
@@ -1447,6 +1451,10 @@ def cmd_health_run(args: argparse.Namespace) -> int:
             "\nNOTE: Health sessions assess only; "
             "they never execute remediation."
         )
+        if runner.last_persistence_errors:
+            print("\nWARNING: session persistence failed:")
+            for err in runner.last_persistence_errors:
+                print(f"  - {err}")
 
     if session.status in (
         HealthStageStatus.COMPLETED,

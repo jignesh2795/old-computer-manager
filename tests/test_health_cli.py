@@ -67,6 +67,7 @@ def _completed_session() -> HealthSession:
 def _run_main(argv: list[str], session) -> tuple[int, str]:
     runner_cls = MagicMock()
     runner_cls.return_value.run_session.return_value = session
+    runner_cls.return_value.last_persistence_errors = []
     with (
         patch.object(sys, "argv", argv),
         patch("app.health.runner.HealthSessionRunner", runner_cls),
@@ -104,6 +105,20 @@ class TestCommandExists:
             assert main() == 0
         _, kwargs = runner_cls.call_args
         assert kwargs.get("profile", "quick") == "quick"
+
+    def test_cli_passes_session_store(self):
+        session = _completed_session()
+        runner_cls = MagicMock()
+        runner_cls.return_value.run_session.return_value = session
+        runner_cls.return_value.last_persistence_errors = []
+        with (
+            patch.object(sys, "argv", ["prog", "health", "run"]),
+            patch("app.health.runner.HealthSessionRunner", runner_cls),
+            redirect_stdout(io.StringIO()),
+        ):
+            assert main() == 0
+        _, kwargs = runner_cls.call_args
+        assert "session_store" in kwargs
 
 
 class TestUnknownProfile:
