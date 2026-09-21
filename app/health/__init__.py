@@ -24,6 +24,14 @@ from app.health.profiles import (
     is_stage_enabled,
 )
 
+from app.health.runner import (
+    HealthSessionRunner,
+    StageInvocation,
+    StageOutcome,
+    derive_data_quality,
+    derive_session_status,
+)
+
 __all__ = [
     "TERMINAL_STATUSES",
     "DEFAULT_BUDGETS",
@@ -33,10 +41,15 @@ __all__ = [
     "HealthBudgets",
     "HealthProfile",
     "HealthSession",
+    "HealthSessionRunner",
     "HealthStage",
     "HealthStageStatus",
     "HealthStageType",
     "ProfileConfig",
+    "StageInvocation",
+    "StageOutcome",
+    "derive_data_quality",
+    "derive_session_status",
     "get_profile",
     "is_legal_transition",
     "is_stage_enabled",
