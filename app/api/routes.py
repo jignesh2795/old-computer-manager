@@ -6,7 +6,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.api.dependencies import get_report, get_store
+from app.api.dependencies import get_health_session_store, get_report, get_store
 from app.api.schemas import (
     ActionCandidateResponse,
     ActionCandidatesResponse,
@@ -22,6 +22,10 @@ from app.api.schemas import (
     FileAnalysisResponse,
     FindingResponse,
     FindingsResponse,
+    HealthSessionResponse,
+    HealthSessionSummaryResponse,
+    HealthStageResponse,
+    HealthStagesResponse,
     HistorySummaryResponse,
     LimitationResponse,
     ObservationResponse,
@@ -1086,3 +1090,88 @@ def get_diagnostics_driver_consistency(
 ) -> DiagnosticsSummaryResponse:
     """Return driver consistency diagnostic results."""
     return _get_diagnostic_results(store, category="driver_consistency")
+
+
+def _health_stage_to_response(stage: Any) -> HealthStageResponse:
+    """Project a persisted HealthStage (references only, no payloads)."""
+    return HealthStageResponse(
+        stage_id=stage.stage_id,
+        stage_type=stage.stage_type.value,
+        status=stage.status.value,
+        started_at=stage.started_at,
+        completed_at=stage.completed_at,
+        duration_ms=stage.duration_ms,
+        error=stage.error,
+        evidence_timestamp=stage.evidence_timestamp,
+        data_quality=stage.data_quality.value,
+        evidence_refs=list(stage.evidence_refs),
+    )
+
+
+@router.get("/health/sessions", response_model=list[HealthSessionSummaryResponse], tags=["health"])
+def get_health_sessions(
+    limit: int = Query(20, ge=1, le=100, description="Maximum sessions to return"),
+    session_store: Any = Depends(get_health_session_store),
+) -> list[HealthSessionSummaryResponse]:
+    """List persisted health sessions, newest first.
+
+    Read-only inspection; never triggers discovery, analysis,
+    diagnostics, AI, or remediation.
+    """
+    return [
+        HealthSessionSummaryResponse(
+            session_id=session.session_id,
+            profile=session.profile,
+            status=session.status.value,
+            created_at=session.created_at,
+            started_at=session.started_at,
+            completed_at=session.completed_at,
+            data_quality=session.data_quality.value,
+            stage_count=len(session.stages),
+            discovery_run_id=session.discovery_run_id,
+            evidence_ids=list(session.evidence_ids),
+        )
+        for session in session_store.list_sessions(limit=limit)
+    ]
+
+
+@router.get("/health/sessions/{session_id}", response_model=HealthSessionResponse, tags=["health"])
+def get_health_session(
+    session_id: str,
+    session_store: Any = Depends(get_health_session_store),
+) -> HealthSessionResponse:
+    """Return one persisted health session with its stages."""
+    session = session_store.get_session(session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return HealthSessionResponse(
+        session_id=session.session_id,
+        profile=session.profile,
+        status=session.status.value,
+        created_at=session.created_at,
+        started_at=session.started_at,
+        completed_at=session.completed_at,
+        data_quality=session.data_quality.value,
+        budgets=dict(session.budgets),
+        stages=[_health_stage_to_response(stage) for stage in session.stages],
+        discovery_run_id=session.discovery_run_id,
+        evidence_ids=list(session.evidence_ids),
+    )
+
+
+@router.get("/health/sessions/{session_id}/stages", response_model=HealthStagesResponse, tags=["health"])
+def get_health_session_stages(
+    session_id: str,
+    session_store: Any = Depends(get_health_session_store),
+) -> HealthStagesResponse:
+    """Return persisted stages for one health session."""
+    session = session_store.get_session(session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return HealthStagesResponse(
+        session_id=session_id,
+        stages=[
+            _health_stage_to_response(stage)
+            for stage in session_store.get_stages(session_id)
+        ],
+    )

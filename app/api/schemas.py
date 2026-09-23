@@ -388,3 +388,48 @@ class ConfirmationCreateRequest(BaseModel):
 class ConfirmationErrorResponse(BaseModel):
     error: str
     detail: str = ""
+
+
+class HealthStageResponse(BaseModel):
+    stage_id: str
+    stage_type: str
+    status: str
+    started_at: str | None = None
+    completed_at: str | None = None
+    duration_ms: int = 0
+    error: str | None = None
+    evidence_timestamp: str | None = None
+    data_quality: str = "unknown"
+    evidence_refs: list[str] = []
+
+
+class HealthSessionSummaryResponse(BaseModel):
+    session_id: str
+    profile: str
+    status: str
+    created_at: str
+    started_at: str | None = None
+    completed_at: str | None = None
+    data_quality: str = "unknown"
+    stage_count: int = 0
+    discovery_run_id: int | None = None
+    evidence_ids: list[str] = []
+
+
+class HealthSessionResponse(BaseModel):
+    session_id: str
+    profile: str
+    status: str
+    created_at: str
+    started_at: str | None = None
+    completed_at: str | None = None
+    data_quality: str = "unknown"
+    budgets: dict[str, int] = {}
+    stages: list[HealthStageResponse] = []
+    discovery_run_id: int | None = None
+    evidence_ids: list[str] = []
+
+
+class HealthStagesResponse(BaseModel):
+    session_id: str
+    stages: list[HealthStageResponse] = []
