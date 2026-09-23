@@ -119,6 +119,30 @@ This document tracks completed milestones and potential future directions for Ol
 
 ---
 
+### v0.16.0-alpha — Intelligence Orchestrator (Phase 12) ✓
+
+**Status**: 2026-09-23 (release freeze)
+
+**Capabilities**:
+- HealthSession model: immutable session/stage records with explicit orchestration statuses
+- Profiles: quick/standard/full/diagnostic/advisory as configuration (diagnostics/AI explicitly requested)
+- Budget configuration and non-preemptive enforcement (runtime, history, AI context, evidence)
+- HealthSessionRunner with dependency-aware stage isolation and failure boundaries
+- Session persistence: health_sessions/health_stages tables storing references only, never payloads
+- CLI: `health run [--profile] [--json]`, `health sessions`, `health session <id>`, `health stages <id>`
+- Read-only health-session API: GET sessions/session/stages with bounded limit and 404 semantics
+- Dashboard Latest Health Session context (manual refresh, no polling, no execution)
+- 100+ new tests; backend suite green; frontend suite/build green
+
+**Design decisions**:
+- Orchestrator ends at candidates; remediation remains exclusively behind Preview → Confirmation → ControlledExecutionService
+- Diagnostics and AI run only when explicitly profile-selected; `full` does not silently enable them
+- Session FAILED only when discovery/candidates fail; auxiliary failures yield PARTIAL
+- Persistence failure is recorded explicitly and never rewrites stage results
+- No daemon, scheduler, automatic monitoring, or automatic remediation
+
+---
+
 ### v0.15.1-alpha — Execution Accounting Hardening ✓
 
 **Status**: 2026-09-20 (patch release)
@@ -281,6 +305,6 @@ The following features are **not implemented** and represent potential developme
 
 No arbitrary dates or version numbers are committed to in advance. Development proceeds through milestones based on user needs and technical readiness.
 
-Current version: **v0.15.1-alpha**
+Current version: **v0.16.0-alpha**
 
 Next version will be determined when sufficient new functionality warrants a release.

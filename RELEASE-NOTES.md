@@ -1,3 +1,35 @@
+# Release Notes: v0.16.0-alpha
+
+**Intelligence Orchestrator — Read-Only Assessment Sessions**
+
+Released: 2026-09-23
+
+## Summary
+
+Old Computer Manager v0.16.0-alpha introduces the Phase 12 orchestration layer. Discovery, analysis, history, diagnostics, AI advisory, and candidates are now coordinated as explicit `HealthSession` runs with profiles, budgets, stage isolation, persistence, API inspection, and dashboard context.
+
+## What Changed
+
+### Orchestration
+- Health sessions with profiles: quick, standard, full, diagnostic, advisory
+- Diagnostics and AI run only when explicitly profile-selected
+- Stage isolation: one failed WMI diagnostic cannot invalidate an otherwise good session
+- Budgets enforced non-preemptively (no threads, cancellation, or background work)
+
+### Persistence and inspection
+- Sessions persist to `health_sessions`/`health_stages` as references (IDs, timestamps, configuration) — never discovery, diagnostic, or candidate payloads
+- CLI inspection: `health sessions`, `health session <id>`, `health stages <id>`
+- Read-only API: `GET /api/v1/health/sessions[/{id}[/stages]]`
+- Dashboard Latest Health Session section on manual refresh
+
+## What Did Not Change
+
+- Read-only orchestration: the runner ends at candidates and has no execution authority
+- Remediation remains outside the orchestrator (Preview → Confirmation → ControlledExecutionService)
+- No daemon, scheduler, automatic monitoring, or new remediation actions
+
+---
+
 # Release Notes: v0.15.1-alpha
 
 **Execution Accounting Hardening — Patch Release**

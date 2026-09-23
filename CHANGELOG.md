@@ -4,6 +4,30 @@ All notable changes to Old Computer Manager will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [v0.16.0-alpha] - 2026-09-23
+
+### Phase 12 — Intelligence Orchestrator
+
+This release adds a read-only orchestration layer over the existing subsystems. A health assessment is now an explicit `HealthSession` (profile + budgets + isolated stages + persisted references) instead of independent tool invocations.
+
+#### Orchestration core
+- `HealthSession` / `HealthStage` immutable models with explicit orchestration statuses (pending/running/completed/partial/failed/skipped/budget_exceeded/stale)
+- Profiles as configuration: quick/standard/full/diagnostic/advisory; diagnostics and AI are explicitly requested work, never side effects
+- Budget configuration and non-preemptive enforcement (session/stage runtime, history runs, AI context items, evidence refs)
+- `HealthSessionRunner` with dependency-aware stage isolation; failures never abort the session
+- Session FAILED only when discovery/candidates fail; auxiliary failures yield PARTIAL
+
+#### Persistence and inspection
+- `health_sessions` / `health_stages` SQLite tables via `SnapshotStore` migration; references only, never evidence payloads
+- CLI: `health run [--profile] [--json]`, `health sessions`, `health session <id>`, `health stages <id>`
+- Read-only API: `GET /api/v1/health/sessions`, `/sessions/{id}`, `/sessions/{id}/stages` (bounded limit, 404 semantics)
+- Dashboard Latest Health Session context on the manual refresh lifecycle (no polling, no execution)
+
+#### Boundaries (unchanged)
+- No execution, scheduling, daemon, automatic monitoring, or automatic remediation introduced
+- Remediation remains exclusively behind Preview → Confirmation → ControlledExecutionService
+- `app/health/*` imports neither executor, confirmation, nor subprocess (test-enforced)
+
 ## [v0.15.1-alpha] - 2026-09-20
 
 ### Phase 11D.2 — Execution Accounting Hardening
