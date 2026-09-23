@@ -285,3 +285,50 @@ export interface DiagnosticsSummaryResponse {
   status_counts: Record<string, number>
   results: DiagnosticResultResponse[]
 }
+
+// Health session types (Phase 12.9 projections, references only)
+
+export interface HealthStageResponse {
+  stage_id: string
+  stage_type: string
+  status: string
+  started_at: string | null
+  completed_at: string | null
+  duration_ms: number
+  error: string | null
+  evidence_timestamp: string | null
+  data_quality: string
+  evidence_refs: string[]
+}
+
+export interface HealthSessionSummaryResponse {
+  session_id: string
+  profile: string
+  status: string
+  created_at: string
+  started_at: string | null
+  completed_at: string | null
+  data_quality: string
+  stage_count: number
+  discovery_run_id: number | null
+  evidence_ids: string[]
+}
+
+export interface HealthSessionResponse {
+  session_id: string
+  profile: string
+  status: string
+  created_at: string
+  started_at: string | null
+  completed_at: string | null
+  data_quality: string
+  budgets: Record<string, number>
+  stages: HealthStageResponse[]
+  discovery_run_id: number | null
+  evidence_ids: string[]
+}
+
+export interface HealthStagesResponse {
+  session_id: string
+  stages: HealthStageResponse[]
+}

@@ -13,6 +13,9 @@ import type {
   AdvisoryResponse,
   HistorySummaryResponse,
   DiagnosticsSummaryResponse,
+  HealthSessionSummaryResponse,
+  HealthSessionResponse,
+  HealthStagesResponse,
 } from '../types/api'
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8000'
@@ -42,4 +45,7 @@ export const api = {
   diagnosticsPerformance: () => fetchJson<DiagnosticsSummaryResponse>('/api/v1/diagnostics/performance'),
   diagnosticsDevices: () => fetchJson<DiagnosticsSummaryResponse>('/api/v1/diagnostics/devices'),
   diagnosticsWindows: () => fetchJson<DiagnosticsSummaryResponse>('/api/v1/diagnostics/windows'),
+  healthSessions: (limit = 1) => fetchJson<HealthSessionSummaryResponse[]>(`/api/v1/health/sessions?limit=${limit}`),
+  healthSession: (sessionId: string) => fetchJson<HealthSessionResponse>(`/api/v1/health/sessions/${encodeURIComponent(sessionId)}`),
+  healthStages: (sessionId: string) => fetchJson<HealthStagesResponse>(`/api/v1/health/sessions/${encodeURIComponent(sessionId)}/stages`),
 }

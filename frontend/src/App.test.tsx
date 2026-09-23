@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import App from './App'
@@ -21,6 +21,9 @@ vi.mock('./api/client', () => ({
     diagnosticsPerformance: vi.fn(),
     diagnosticsDevices: vi.fn(),
     diagnosticsWindows: vi.fn(),
+    healthSessions: vi.fn().mockResolvedValue(null),
+    healthSession: vi.fn().mockResolvedValue(null),
+    healthStages: vi.fn().mockResolvedValue(null),
   },
 }))
 
@@ -215,6 +218,73 @@ function setupMocks() {
   vi.mocked(api.system).mockResolvedValue(mockReport.system as any)
   vi.mocked(api.history).mockResolvedValue(null as any)
   vi.mocked(api.diagnosticsSummary).mockResolvedValue(mockReport.diagnostics as any)
+  vi.mocked(api.healthSessions).mockResolvedValue([mockSessionSummary] as any)
+  vi.mocked(api.healthSession).mockResolvedValue(mockSession as any)
+  vi.mocked(api.healthStages).mockResolvedValue({ session_id: 'hs_test_001', stages: mockSession.stages } as any)
+}
+
+const mockSessionSummary = {
+  session_id: 'hs_test_001',
+  profile: 'quick',
+  status: 'completed',
+  created_at: '2026-09-21T00:00:00+00:00',
+  started_at: '2026-09-21T00:00:00+00:00',
+  completed_at: '2026-09-21T00:00:01+00:00',
+  data_quality: 'good',
+  stage_count: 3,
+  discovery_run_id: 16,
+  evidence_ids: ['discovery_run:16'],
+}
+
+const mockSessionStages = [
+  {
+    stage_id: 'hs_test_001:discovery',
+    stage_type: 'discovery',
+    status: 'completed',
+    started_at: '2026-09-21T00:00:00+00:00',
+    completed_at: '2026-09-21T00:00:01+00:00',
+    duration_ms: 8200,
+    error: null,
+    evidence_timestamp: '2026-09-21T00:00:01+00:00',
+    data_quality: 'good',
+    evidence_refs: ['discovery_run:16'],
+  },
+  {
+    stage_id: 'hs_test_001:analysis',
+    stage_type: 'analysis',
+    status: 'completed',
+    started_at: '2026-09-21T00:00:01+00:00',
+    completed_at: '2026-09-21T00:00:01+00:00',
+    duration_ms: 400,
+    error: null,
+    evidence_timestamp: '2026-09-21T00:00:01+00:00',
+    data_quality: 'good',
+    evidence_refs: ['discovery_run:16'],
+  },
+  {
+    stage_id: 'hs_test_001:candidates',
+    stage_type: 'candidates',
+    status: 'completed',
+    started_at: '2026-09-21T00:00:01+00:00',
+    completed_at: '2026-09-21T00:00:01+00:00',
+    duration_ms: 100,
+    error: null,
+    evidence_timestamp: '2026-09-21T00:00:01+00:00',
+    data_quality: 'good',
+    evidence_refs: ['discovery_run:16'],
+  },
+]
+
+const mockSession = {
+  ...mockSessionSummary,
+  budgets: {
+    max_session_runtime_ms: 300000,
+    max_stage_runtime_ms: 120000,
+    max_history_runs: 50,
+    max_evidence_items: 10,
+    max_ai_context_items: 30,
+  },
+  stages: mockSessionStages,
 }
 
 async function clickRefresh() {
@@ -287,6 +357,9 @@ describe('Dashboard', () => {
     vi.mocked(api.system).mockResolvedValue(mockReport.system as any)
     vi.mocked(api.history).mockResolvedValue(null as any)
     vi.mocked(api.diagnosticsSummary).mockResolvedValue(mockReport.diagnostics as any)
+    vi.mocked(api.healthSessions).mockResolvedValue(null)
+    vi.mocked(api.healthSession).mockResolvedValue(null)
+    vi.mocked(api.healthStages).mockResolvedValue(null)
 
     render(<App />)
     await clickRefresh()
@@ -322,6 +395,9 @@ describe('Dashboard', () => {
     vi.mocked(api.system).mockResolvedValue(mockReport.system as any)
     vi.mocked(api.history).mockResolvedValue(null as any)
     vi.mocked(api.diagnosticsSummary).mockResolvedValue(mockReport.diagnostics as any)
+    vi.mocked(api.healthSessions).mockResolvedValue(null)
+    vi.mocked(api.healthSession).mockResolvedValue(null)
+    vi.mocked(api.healthStages).mockResolvedValue(null)
 
     render(<App />)
     await clickRefresh()
@@ -395,6 +471,9 @@ describe('Dashboard', () => {
     vi.mocked(api.system).mockResolvedValue(null)
     vi.mocked(api.history).mockResolvedValue(null)
     vi.mocked(api.diagnosticsSummary).mockResolvedValue(null)
+    vi.mocked(api.healthSessions).mockResolvedValue(null)
+    vi.mocked(api.healthSession).mockResolvedValue(null)
+    vi.mocked(api.healthStages).mockResolvedValue(null)
 
     render(<App />)
     await clickRefresh()
@@ -425,5 +504,139 @@ describe('Dashboard', () => {
       expect(api.report).toHaveBeenCalled()
       expect(api.system).toHaveBeenCalled()
     })
+  })
+
+  it('renders latest health session after refresh', async () => {
+    setupMocks()
+    render(<App />)
+    await clickRefresh()
+
+    await waitFor(() => {
+      expect(screen.getByText('Latest Health Session')).toBeInTheDocument()
+    })
+    const card = within(screen.getByText('Latest Health Session').closest('.card') as HTMLElement)
+    expect(card.getByText('quick')).toBeInTheDocument()
+    expect(card.getByText('completed')).toBeInTheDocument()
+    expect(card.getByText(/discovery/)).toBeInTheDocument()
+    expect(card.getByText('8.20s')).toBeInTheDocument()
+  })
+
+  it('selects the newest session from the list', async () => {
+    setupMocks()
+    vi.mocked(api.healthSessions).mockResolvedValue([
+      { ...mockSessionSummary, session_id: 'hs_newest' },
+      { ...mockSessionSummary, session_id: 'hs_older' },
+    ] as any)
+    render(<App />)
+    await clickRefresh()
+
+    await waitFor(() => {
+      expect(api.healthSession).toHaveBeenCalledWith('hs_newest')
+    })
+    expect(api.healthStages).toHaveBeenCalledWith('hs_newest')
+  })
+
+  it('renders failed session with skipped and budget stages', async () => {
+    setupMocks()
+    const mixedStages = [
+      { ...mockSessionStages[0], status: 'completed' },
+      {
+        ...mockSessionStages[1],
+        status: 'skipped',
+        error: "Skipped because prerequisite stage 'x' did not complete.",
+      },
+      {
+        ...mockSessionStages[2],
+        status: 'budget_exceeded',
+        error: 'stage exceeded max_stage_runtime_ms',
+      },
+    ]
+    vi.mocked(api.healthSession).mockResolvedValue({
+      ...mockSession,
+      status: 'partial',
+      stages: mixedStages,
+    } as any)
+    vi.mocked(api.healthStages).mockResolvedValue({
+      session_id: 'hs_test_001',
+      stages: mixedStages,
+    } as any)
+    render(<App />)
+    await clickRefresh()
+
+    await waitFor(() => {
+      expect(screen.getByText('Latest Health Session')).toBeInTheDocument()
+    })
+    const card = within(screen.getByText('Latest Health Session').closest('.card') as HTMLElement)
+    expect(card.getByText('partial')).toBeInTheDocument()
+    expect(card.getByText(/\[SKIP\]/)).toBeInTheDocument()
+    expect(card.getByText(/\[BUDGET\]/)).toBeInTheDocument()
+    expect(card.getByText(/prerequisite stage/)).toBeInTheDocument()
+  })
+
+  it('shows session empty state when no sessions exist', async () => {
+    setupMocks()
+    vi.mocked(api.healthSessions).mockResolvedValue([])
+    render(<App />)
+    await clickRefresh()
+
+    await waitFor(() => {
+      expect(screen.getByText(/No health sessions recorded yet/)).toBeInTheDocument()
+    })
+  })
+
+  it('handles session API failure gracefully', async () => {
+    setupMocks()
+    vi.mocked(api.healthSessions).mockRejectedValue(new Error('unavailable'))
+    render(<App />)
+    await clickRefresh()
+
+    await waitFor(() => {
+      expect(screen.getAllByText('TEST-PC', { exact: false }).length).toBeGreaterThan(0)
+    })
+    expect(screen.getByText(/No health sessions recorded yet/)).toBeInTheDocument()
+  })
+
+  it('displays references without payloads', async () => {
+    setupMocks()
+    render(<App />)
+    await clickRefresh()
+
+    await waitFor(() => {
+      expect(screen.getByText('Latest Health Session')).toBeInTheDocument()
+    })
+    const card = within(screen.getByText('Latest Health Session').closest('.card') as HTMLElement)
+    expect(card.getByText('16')).toBeInTheDocument()
+    expect(card.getByText('1')).toBeInTheDocument()
+  })
+
+  it('fetches session endpoints only on manual refresh', async () => {
+    setupMocks()
+    render(<App />)
+
+    await new Promise((resolve) => setTimeout(resolve, 100))
+
+    expect(api.healthSessions).not.toHaveBeenCalled()
+    expect(api.healthSession).not.toHaveBeenCalled()
+
+    await clickRefresh()
+
+    await waitFor(() => {
+      expect(api.healthSessions).toHaveBeenCalledWith(1)
+      expect(api.healthSession).toHaveBeenCalledWith('hs_test_001')
+      expect(api.healthStages).toHaveBeenCalledWith('hs_test_001')
+    })
+  })
+
+  it('uses GET-only session endpoints with no polling', async () => {
+    const fs = await import('node:fs')
+    const clientSource = fs.readFileSync('src/api/client.ts', 'utf-8')
+    const appSource = fs.readFileSync('src/App.tsx', 'utf-8')
+    for (const token of ['.post(', '.put(', '.patch(', '.delete(', 'method:']) {
+      expect(clientSource.includes(token)).toBe(false)
+    }
+    expect(clientSource).toContain('/api/v1/health/sessions')
+    expect(appSource).not.toContain('setInterval')
+    expect(appSource).not.toContain('WebSocket')
+    expect(appSource).not.toContain('setTimeout')
   })
 })

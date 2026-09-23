@@ -12,6 +12,8 @@ import type {
   SystemResponse,
   HistorySummaryResponse,
   DiagnosticsSummaryResponse,
+  HealthSessionResponse,
+  HealthStageResponse,
 } from './types/api'
 import { Overview } from './components/Overview'
 import { Findings } from './components/Findings'
@@ -23,6 +25,7 @@ import { Remediation } from './components/Remediation'
 import { System } from './components/System'
 import { Historical } from './components/Historical'
 import { Diagnostics } from './components/Diagnostics'
+import { HealthSession } from './components/HealthSession'
 
 interface DashboardData {
   report: ReportResponse | null
@@ -35,6 +38,8 @@ interface DashboardData {
   system: SystemResponse | null
   history: HistorySummaryResponse | null
   diagnostics: DiagnosticsSummaryResponse | null
+  healthSession: HealthSessionResponse | null
+  healthStages: HealthStageResponse[] | null
 }
 
 function App() {
@@ -49,6 +54,8 @@ function App() {
     system: null,
     history: null,
     diagnostics: null,
+    healthSession: null,
+    healthStages: null,
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -83,6 +90,24 @@ function App() {
         api.diagnosticsSummary().catch(() => null),
       ])
 
+      // Latest persisted health session (read-only inspection only).
+      let healthSession: HealthSessionResponse | null = null
+      let healthStages: HealthStageResponse[] | null = null
+      try {
+        const summaries = await api.healthSessions(1).catch(() => null)
+        const latest = summaries?.[0]
+        if (latest) {
+          healthSession = await api.healthSession(latest.session_id).catch(() => null)
+          if (healthSession) {
+            const stagesResp = await api.healthStages(latest.session_id).catch(() => null)
+            healthStages = stagesResp?.stages ?? null
+          }
+        }
+      } catch {
+        healthSession = null
+        healthStages = null
+      }
+
       setData({
         report,
         advisory,
@@ -94,6 +119,8 @@ function App() {
         system,
         history,
         diagnostics,
+        healthSession,
+        healthStages,
       })
       setLastFetch(new Date().toLocaleTimeString())
     } catch (err) {
@@ -129,6 +156,7 @@ function App() {
 
       {data.report && (
         <div className="grid">
+          <HealthSession session={data.healthSession} stages={data.healthStages} />
           <Overview
             system={data.system}
             storage={data.storage}
